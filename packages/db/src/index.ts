@@ -1,2 +1,13 @@
-// Drizzle schema + migrations(M0 步骤 4:tasks / task_events,字段参考 EMAgent migration 0003/0004)
-export const DB_PACKAGE = "@glassbox/db" as const;
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import * as schema from "./schema.js";
+
+export * from "./schema.js";
+
+export function createDb(connectionString: string) {
+  const pool = new pg.Pool({ connectionString });
+  const db = drizzle(pool, { schema });
+  return { pool, db };
+}
+
+export type Db = ReturnType<typeof createDb>["db"];

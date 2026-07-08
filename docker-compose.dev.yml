@@ -1,0 +1,22 @@
+# 本地开发依赖(仅数据库)。生产 compose 位于 deploy/(M0 步骤 7)。
+name: glassbox-dev
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: glassbox-pg
+    environment:
+      POSTGRES_USER: glassbox
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: glassbox
+    ports:
+      # 宿主机用 55432:本机 D:\PostGre 的原生 PostgreSQL 占着 5432
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glassbox -d glassbox"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata:

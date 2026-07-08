@@ -1,3 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+# 构建脚本放行:pnpm 默认拦第三方 postinstall(供应链防护),逐个显式审批
+# esbuild:drizzle-kit 依赖,postinstall 下载平台二进制
+allowBuilds:
+  esbuild: true
