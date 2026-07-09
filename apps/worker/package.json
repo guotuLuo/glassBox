@@ -4,10 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "start": "tsx src/main.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
+    "tsx": "^4.23.0",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@glassbox/contracts": "workspace:*",
+    "@glassbox/core": "workspace:*",
+    "@glassbox/db": "workspace:*",
+    "@nestjs/common": "^11.1.27",
+    "@nestjs/core": "^11.1.27",
+    "dotenv": "^17.4.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   }
 }

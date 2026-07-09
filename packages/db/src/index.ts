@@ -10,4 +10,9 @@ export function createDb(connectionString: string) {
   return { pool, db };
 }
 
-export type Db = ReturnType<typeof createDb>["db"];
+export type DbHandle = ReturnType<typeof createDb>;
+export type Db = DbHandle["db"];
+
+export type TaskRow = typeof schema.tasks.$inferSelect;
+export type NewTaskRow = typeof schema.tasks.$inferInsert;
+export type TaskEventRow = typeof schema.taskEvents.$inferSelect;
