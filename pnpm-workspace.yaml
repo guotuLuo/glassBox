@@ -4,6 +4,10 @@ packages:
 # 构建脚本放行:pnpm 默认拦第三方 postinstall(供应链防护),逐个显式审批
 # esbuild:drizzle-kit 依赖,postinstall 下载平台二进制
 # sharp:Next 图像优化原生库
+# ssh2/cpu-features/protobufjs:testcontainers 传递依赖的可选原生加速,拒绝(有纯 JS 回退)
 allowBuilds:
+  cpu-features: false
   esbuild: true
+  protobufjs: false
   sharp: true
+  ssh2: false

@@ -28,10 +28,12 @@ export const taskEventNotificationSchema = z.object({
 });
 export type TaskEventNotification = z.infer<typeof taskEventNotificationSchema>;
 
-/** M0 已知事件类型;消费方必须容忍未知值(后续阶段会增) */
+/** 已知事件类型;消费方必须容忍未知值(逐阶段增) */
 export const KNOWN_TASK_EVENT_TYPES = [
   "task.queued",
   "task.claimed",
+  "task.requeued",
+  "task.dead_lettered",
   "hello.step",
   "task.succeeded",
   "task.failed",

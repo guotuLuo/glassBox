@@ -7,6 +7,7 @@ import {
   taskEventDtoSchema,
 } from "@glassbox/contracts";
 import {
+  AlertTriangle,
   Check,
   Cpu,
   History,
@@ -14,6 +15,7 @@ import {
   Loader2,
   type LucideIcon,
   Plus,
+  RotateCcw,
   SendHorizontal,
   Sparkles,
   X,
@@ -54,6 +56,8 @@ const STATUS_DOT: Record<TaskStatus, string> = {
 const EVENT_META: Record<string, { icon: LucideIcon; cls: string }> = {
   "task.queued": { icon: Inbox, cls: "border-border text-muted-foreground" },
   "task.claimed": { icon: Cpu, cls: "border-blue-500/40 text-blue-400" },
+  "task.requeued": { icon: RotateCcw, cls: "border-amber-500/40 text-amber-400" },
+  "task.dead_lettered": { icon: AlertTriangle, cls: "border-red-500/40 text-red-400" },
   "hello.step": { icon: Sparkles, cls: "border-amber-500/40 text-amber-400" },
   "task.succeeded": { icon: Check, cls: "border-emerald-500/40 text-emerald-400" },
   "task.failed": { icon: X, cls: "border-red-500/40 text-red-400" },

@@ -3,11 +3,11 @@ import { type Db, type TaskEventRow, type TaskRow, taskEvents, tasks } from "@gl
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 
 /**
- * M0 队列切片:enqueue / claim / complete / fail + 事件追加。
- * 语义边界(诚实声明,M1 才补齐):
- *  - 租约只在认领时设置,尚无心跳续租与过期重投递(reaper);
- *  - failed 在 M0 是终态,delivery_attempts 计数已就位但重试策略未激活;
- *  - 事件与状态变更同事务提交,pg_notify 随事务提交后送达(门铃语义)。
+ * 耐久队列切片(M0 打底,M1 激活租约语义)。
+ * 交付语义(总纲 §6 口径):执行 at-least-once,任务终态 exactly-once ——
+ * 终态写入以 (id, lease_owner, status='running') 为守卫,僵尸 worker 的迟到写入变成 no-op;
+ * 中途步骤(事件)在重投递后可能重复,消费方按事件 id 幂等。
+ * M1 仍欠:park/resume、检查点恢复、SIGKILL 混沌测试。
  */
 
 /** drizzle 事务回调里的执行器与 Db 同构,统一用该别名 */
@@ -93,10 +93,10 @@ export interface ClaimInput {
 
 /**
  * 认领:UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1)。
- * SKIP LOCKED 让并发 worker 各拿各的行,互不排队;租约窗口写入 lease_expires_at。
+ * SKIP LOCKED 让并发 worker 各拿各的行;租约窗口由 SQL 侧 now() 计算,应用时钟不参与。
  */
 export async function claimNextTask(db: Db, input: ClaimInput): Promise<TaskRow | null> {
-  const claimed = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const rows = await tx
       .update(tasks)
       .set({
@@ -130,13 +130,118 @@ export async function claimNextTask(db: Db, input: ClaimInput): Promise<TaskRow 
     });
     return task;
   });
-  return claimed;
 }
 
-/** 完成:状态置 succeeded + 结果落库 + 终态事件,同事务 */
-export async function completeTask(db: Db, taskId: string, result: unknown): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
+export interface HeartbeatInput {
+  taskId: string;
+  workerId: string;
+  leaseSeconds: number;
+}
+
+/** 心跳续租:仍持有租约才续期;false = 租约已易主或任务已离开 running */
+export async function heartbeatTask(db: Db, input: HeartbeatInput): Promise<boolean> {
+  const rows = await db
+    .update(tasks)
+    .set({
+      leaseExpiresAt: sql`now() + make_interval(secs => ${input.leaseSeconds})`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(tasks.id, input.taskId),
+        eq(tasks.leaseOwner, input.workerId),
+        eq(tasks.status, "running"),
+      ),
+    )
+    .returning({ id: tasks.id });
+  return rows.length > 0;
+}
+
+export interface ReapResult {
+  requeued: number;
+  deadLettered: number;
+}
+
+/**
+ * 过期租约回收(reaper):worker 周期性调用,天然多实例安全——
+ * UPDATE 原子生效,后到者的 WHERE 匹配不到已被改走的行。
+ * 退避:第 n 次投递失败后等 (n-1)*5s(上限 60s)才再次可认领;首次重投递不等待。
+ */
+export async function reapExpiredLeases(db: Db): Promise<ReapResult> {
+  const requeuedRows = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(tasks)
+      .set({
+        status: "queued",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        availableAt: sql`now() + make_interval(secs => greatest(least((${tasks.deliveryAttempts} - 1) * 5, 60), 0))`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(tasks.status, "running"),
+          sql`${tasks.leaseExpiresAt} < now()`,
+          sql`${tasks.deliveryAttempts} < ${tasks.maxDeliveryAttempts}`,
+        ),
+      )
+      .returning({ id: tasks.id, attempts: tasks.deliveryAttempts });
+    for (const row of rows) {
+      await appendEvent(tx, {
+        taskId: row.id,
+        eventType: "task.requeued",
+        message: `lease expired after delivery ${row.attempts}, requeued`,
+        payload: { deliveryAttempts: row.attempts },
+      });
+    }
+    return rows;
+  });
+
+  const deadRows = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(tasks)
+      .set({
+        status: "failed",
+        deadLetter: true,
+        error: "lease expired and max delivery attempts exhausted",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        finishedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(tasks.status, "running"),
+          sql`${tasks.leaseExpiresAt} < now()`,
+          sql`${tasks.deliveryAttempts} >= ${tasks.maxDeliveryAttempts}`,
+        ),
+      )
+      .returning({ id: tasks.id, attempts: tasks.deliveryAttempts });
+    for (const row of rows) {
+      await appendEvent(tx, {
+        taskId: row.id,
+        eventType: "task.dead_lettered",
+        message: `max delivery attempts (${row.attempts}) exhausted`,
+      });
+    }
+    return rows;
+  });
+
+  return { requeued: requeuedRows.length, deadLettered: deadRows.length };
+}
+
+/**
+ * 完成:仅当调用方仍持有租约(终态 exactly-once 守卫)。
+ * false = 租约已易主(本 worker 是僵尸),终态由新持有者负责,调用方必须放弃写入。
+ */
+export async function completeTask(
+  db: Db,
+  taskId: string,
+  workerId: string,
+  result: unknown,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
       .update(tasks)
       .set({
         status: "succeeded",
@@ -146,15 +251,23 @@ export async function completeTask(db: Db, taskId: string, result: unknown): Pro
         finishedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
-      .where(eq(tasks.id, taskId));
+      .where(and(eq(tasks.id, taskId), eq(tasks.leaseOwner, workerId), eq(tasks.status, "running")))
+      .returning({ id: tasks.id });
+    if (rows.length === 0) return false;
     await appendEvent(tx, { taskId, eventType: "task.succeeded", payload: { result } });
+    return true;
   });
 }
 
-/** 失败:M0 下为终态(重投递策略 M1 激活) */
-export async function failTask(db: Db, taskId: string, errorMessage: string): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
+/** 失败(业务错误,非租约过期):同样受终态守卫;dead_letter 标志只由 reaper 置位 */
+export async function failTask(
+  db: Db,
+  taskId: string,
+  workerId: string,
+  errorMessage: string,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
       .update(tasks)
       .set({
         status: "failed",
@@ -164,8 +277,11 @@ export async function failTask(db: Db, taskId: string, errorMessage: string): Pr
         finishedAt: sql`now()`,
         updatedAt: sql`now()`,
       })
-      .where(eq(tasks.id, taskId));
+      .where(and(eq(tasks.id, taskId), eq(tasks.leaseOwner, workerId), eq(tasks.status, "running")))
+      .returning({ id: tasks.id });
+    if (rows.length === 0) return false;
     await appendEvent(tx, { taskId, eventType: "task.failed", message: errorMessage });
+    return true;
   });
 }
 
