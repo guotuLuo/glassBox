@@ -2,6 +2,19 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号在 M1 公开上线后启用 SemVer。
 
+## [Unreleased] — M1 耐久运行时(进行中)
+
+### Added
+
+- 租约心跳续租(仅持有者可续)、过期重投递 reaper(线性退避,首次重投递不等待)、投递耗尽进死信(`dead_letter` 标志 + 事件);全部状态迁移留事件,多 reaper 并发安全(2026-07-09)
+- 终态 exactly-once 守卫:`completeTask/failTask` 以 (id, lease_owner, running) 为条件,僵尸 worker 迟到写入变 no-op(2026-07-09)
+- Vitest + testcontainers 集成测试 ×5:认领/租约、心跳归属、过期重投递+僵尸终态拒绝、死信、幂等键并发竞争(2026-07-09)
+- GitHub Actions CI:lint + typecheck + web 构建 + 测试(2026-07-09)
+
+### 待办(M1 剩余)
+
+- SIGKILL 多进程混沌测试(kill -9 演示的测试化)、park/检查点恢复、LISTEN 唤醒与并发槽位、trace 表(model_calls/tool_calls/steps)、控制台死信视图
+
 ## [Unreleased] — M0 骨架
 
 ### Added
