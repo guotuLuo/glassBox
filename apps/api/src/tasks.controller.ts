@@ -4,7 +4,7 @@ import {
   createTaskRequestSchema,
   type TaskDto,
 } from "@glassbox/contracts";
-import { enqueueTask, getTaskById, listEventsAfter } from "@glassbox/core";
+import { enqueueTask, getTaskById, listEventsAfter, listRecentTasks } from "@glassbox/core";
 import type { DbHandle, TaskRow } from "@glassbox/db";
 import {
   Body,
@@ -14,6 +14,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Req,
   Res,
 } from "@nestjs/common";
@@ -26,6 +27,7 @@ import { ZodValidationPipe } from "./zod.pipe.js";
 
 const HEARTBEAT_MS = 25_000;
 const uuidPipe = new ZodValidationPipe(z.uuid());
+const limitPipe = new ZodValidationPipe(z.coerce.number().int().min(1).max(50).default(20));
 
 @Controller("api/tasks")
 export class TasksController {
@@ -44,6 +46,12 @@ export class TasksController {
       ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
     });
     return { task: toTaskDto(task), deduplicated: !inserted };
+  }
+
+  @Get()
+  async list(@Query("limit", limitPipe) limit: number): Promise<TaskDto[]> {
+    const rows = await listRecentTasks(this.dbh.db, limit);
+    return rows.map(toTaskDto);
   }
 
   @Get(":id")

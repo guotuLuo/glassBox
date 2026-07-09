@@ -1,6 +1,6 @@
 import { TASK_EVENTS_CHANNEL, type TaskEventNotification } from "@glassbox/contracts";
 import { type Db, type TaskEventRow, type TaskRow, taskEvents, tasks } from "@glassbox/db";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 
 /**
  * M0 队列切片:enqueue / claim / complete / fail + 事件追加。
@@ -167,6 +167,11 @@ export async function failTask(db: Db, taskId: string, errorMessage: string): Pr
       .where(eq(tasks.id, taskId));
     await appendEvent(tx, { taskId, eventType: "task.failed", message: errorMessage });
   });
+}
+
+/** 最近任务列表(工作台侧边栏;M1 控制台再加分页/筛选) */
+export async function listRecentTasks(db: Db, limit: number): Promise<TaskRow[]> {
+  return db.select().from(tasks).orderBy(desc(tasks.createdAt)).limit(limit);
 }
 
 /** 单任务查询(api 出口用;查询逻辑收在 core,controller 不碰 SQL) */

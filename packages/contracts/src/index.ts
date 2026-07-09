@@ -78,6 +78,9 @@ export const taskDtoSchema = z.object({
 });
 export type TaskDto = z.infer<typeof taskDtoSchema>;
 
+/** 任务列表(工作台侧边栏) */
+export const taskListSchema = z.array(taskDtoSchema);
+
 /** 提交任务响应;deduplicated=true 表示幂等键命中既有任务 */
 export const createTaskResponseSchema = z.object({
   task: taskDtoSchema,
