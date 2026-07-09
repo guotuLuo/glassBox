@@ -13,6 +13,7 @@
 - `@glassbox/contracts`:任务状态机 / 事件 DTO / 请求响应契约,Zod 单一 schema 源,浏览器端复用校验 SSE 帧(2026-07-09)
 - web 控制台:Next 16 + Tailwind v4 + shadcn/ui(radix-nova),提交表单 + 实时事件流 + 状态徽章(2026-07-09)
 - ADR-000(全栈 TS)/ ADR-001(PG 当队列)/ ADR-002(tsx 运行时 + 显式 DI)(2026-07-09)
+- 工作台 UI v0.5(Codex Desktop 风格):暗色 shell、侧边栏最近任务(`GET /api/tasks`)、事件时间线(图标轨道 + 步进耗时 + payload 展开)、历史任务点开即回放、底部输入条(2026-07-09)
 
 ### 语义边界
 
