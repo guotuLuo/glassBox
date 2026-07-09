@@ -1,0 +1,30 @@
+# M0 步骤 6 的 CI 半边:校验 + 构建。
+# 部署工作流(构建镜像推仓库 → SSH 拉起)等服务器 SSH 与镜像仓库选型确定后另起 deploy.yml。
+name: ci
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版本读 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm --filter @glassbox/web build
+      # testcontainers 用例直接跑在 runner 自带的 Docker 上
+      - run: pnpm test
