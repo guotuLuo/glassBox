@@ -8,12 +8,15 @@
 
 - 租约心跳续租(仅持有者可续)、过期重投递 reaper(线性退避,首次重投递不等待)、投递耗尽进死信(`dead_letter` 标志 + 事件);全部状态迁移留事件,多 reaper 并发安全(2026-07-09)
 - 终态 exactly-once 守卫:`completeTask/failTask` 以 (id, lease_owner, running) 为条件,僵尸 worker 迟到写入变 no-op(2026-07-09)
-- Vitest + testcontainers 集成测试 ×5:认领/租约、心跳归属、过期重投递+僵尸终态拒绝、死信、幂等键并发竞争(2026-07-09)
+- Vitest + testcontainers 集成测试 ×6:认领/租约、心跳归属、过期重投递+僵尸终态拒绝、死信、幂等键并发竞争、检查点归属与随行(2026-07-09)
+- **SIGKILL 混沌测试**:真实 worker 子进程执行中途连杀两刀,断言全部任务收敛 succeeded、终态事件每任务恰好一条、重投递有界、检查点把 step 重放压到每次重投递至多一步(2026-07-09)
+- 检查点续跑:hello agent 每步落检查点(仅租约持有者可写),重投递后从断点继续(2026-07-09)
+- worker 时间参数环境变量化(租约/心跳/reaper/步进),混沌测试用短租约压测(2026-07-09)
 - GitHub Actions CI:lint + typecheck + web 构建 + 测试(2026-07-09)
 
 ### 待办(M1 剩余)
 
-- SIGKILL 多进程混沌测试(kill -9 演示的测试化)、park/检查点恢复、LISTEN 唤醒与并发槽位、trace 表(model_calls/tool_calls/steps)、控制台死信视图
+- park/resume(waiting_* 三态)、LISTEN 唤醒与并发槽位(p-limit)、trace 表(model_calls/tool_calls/steps)、控制台死信/重投递视图、pino 结构化日志
 
 ## [Unreleased] — M0 骨架
 

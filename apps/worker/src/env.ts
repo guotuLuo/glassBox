@@ -13,3 +13,11 @@ export function requireEnv(name: string): string {
   if (!value) throw new Error(`environment variable ${name} is required`);
   return value;
 }
+
+/** 整数环境变量(混沌测试用短租约/快节奏覆盖默认值) */
+export function intEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}

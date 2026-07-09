@@ -13,6 +13,7 @@ import {
   heartbeatTask,
   listEventsAfter,
   reapExpiredLeases,
+  saveCheckpoint,
 } from "../src/queue.js";
 import { sleep } from "../src/utils.js";
 
@@ -152,5 +153,30 @@ describe("耐久队列:幂等键", () => {
     const types = await eventTypes(r1.task.id);
     expect(types.filter((t) => t === "task.queued")).toHaveLength(1);
     expect(await completeTask(handle.db, r1.task.id, "none", {})).toBe(false); // 未认领不可完成
+  });
+});
+
+describe("耐久队列:检查点", () => {
+  it("只有租约持有者能写检查点;检查点随重投递回传给新持有者", async () => {
+    // 清场:把此前用例遗留的可认领任务清干净,避免串台
+    for (;;) {
+      const leftover = await claimNextTask(handle.db, { workerId: "sweeper", leaseSeconds: 60 });
+      if (!leftover) break;
+      await completeTask(handle.db, leftover.id, "sweeper", { swept: true });
+    }
+
+    const { task } = await enqueueHello("checkpoint");
+    await claimNextTask(handle.db, { workerId: "A", leaseSeconds: 1 });
+    expect(await saveCheckpoint(handle.db, task.id, "A", { step: 2 })).toBe(true);
+    expect(await saveCheckpoint(handle.db, task.id, "B", { step: 9 })).toBe(false);
+
+    await sleep(1_300);
+    await reapExpiredLeases(handle.db);
+    const second = await claimNextTask(handle.db, { workerId: "B", leaseSeconds: 60 });
+    expect(second?.id).toBe(task.id);
+    expect(second?.checkpoint).toEqual({ step: 2 }); // 断点随行
+    expect(await saveCheckpoint(handle.db, task.id, "B", { step: 3 })).toBe(true);
+    expect(await saveCheckpoint(handle.db, task.id, "A", { step: 1 })).toBe(false); // 僵尸被拒
+    expect(await completeTask(handle.db, task.id, "B", { ok: true })).toBe(true);
   });
 });

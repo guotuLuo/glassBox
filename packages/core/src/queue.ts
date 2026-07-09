@@ -6,8 +6,9 @@ import { and, desc, eq, gt, sql } from "drizzle-orm";
  * 耐久队列切片(M0 打底,M1 激活租约语义)。
  * 交付语义(总纲 §6 口径):执行 at-least-once,任务终态 exactly-once ——
  * 终态写入以 (id, lease_owner, status='running') 为守卫,僵尸 worker 的迟到写入变成 no-op;
- * 中途步骤(事件)在重投递后可能重复,消费方按事件 id 幂等。
- * M1 仍欠:park/resume、检查点恢复、SIGKILL 混沌测试。
+ * 中途步骤(事件)在重投递后可能重复,消费方按事件 id 幂等;
+ * 检查点把重放压到「每次重投递至多一步」(混沌测试断言此界)。
+ * M1 仍欠:park/resume(waiting_* 三态)、LISTEN 唤醒、并发槽位、trace 表。
  */
 
 /** drizzle 事务回调里的执行器与 Db 同构,统一用该别名 */
@@ -43,6 +44,8 @@ export interface EnqueueInput {
   request: unknown;
   idempotencyKey?: string;
   createdBy?: string;
+  /** 每任务投递上限(默认走表默认值 3) */
+  maxDeliveryAttempts?: number;
 }
 
 export interface EnqueueResult {
@@ -61,6 +64,7 @@ export async function enqueueTask(db: Db, input: EnqueueInput): Promise<EnqueueR
         request: input.request,
         idempotencyKey: input.idempotencyKey ?? null,
         createdBy: input.createdBy ?? null,
+        ...(input.maxDeliveryAttempts ? { maxDeliveryAttempts: input.maxDeliveryAttempts } : {}),
       })
       .onConflictDoNothing({ target: tasks.idempotencyKey })
       .returning();
@@ -153,6 +157,24 @@ export async function heartbeatTask(db: Db, input: HeartbeatInput): Promise<bool
         eq(tasks.status, "running"),
       ),
     )
+    .returning({ id: tasks.id });
+  return rows.length > 0;
+}
+
+/**
+ * 写检查点:只有当前租约持有者能写(与终态同一守卫)。
+ * 重投递时检查点随行返回,新持有者从断点续跑——park/精确恢复语义的地基。
+ */
+export async function saveCheckpoint(
+  db: Db,
+  taskId: string,
+  workerId: string,
+  checkpoint: unknown,
+): Promise<boolean> {
+  const rows = await db
+    .update(tasks)
+    .set({ checkpoint, updatedAt: sql`now()` })
+    .where(and(eq(tasks.id, taskId), eq(tasks.leaseOwner, workerId), eq(tasks.status, "running")))
     .returning({ id: tasks.id });
   return rows.length > 0;
 }
