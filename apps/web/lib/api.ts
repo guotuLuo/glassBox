@@ -9,11 +9,17 @@ import {
 /** M0 直连 api(CORS 放行);上线后由 Caddy 统一域名路由 */
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3001";
 
-export async function createTask(message: string): Promise<CreateTaskResponse> {
+export type AgentKind = "hello" | "research";
+
+export async function createTask(text: string, agent: AgentKind): Promise<CreateTaskResponse> {
+  const body =
+    agent === "research"
+      ? { agentName: "research", input: { question: text } }
+      : { agentName: "hello", input: { message: text } };
   const res = await fetch(`${API_BASE}/api/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agentName: "hello", input: { message } }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`提交失败:HTTP ${res.status}`);
   // 响应过 contracts 校验:前后端共用同一份 zod schema,漂移在运行时立刻暴露

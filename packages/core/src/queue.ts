@@ -1,5 +1,15 @@
 import { TASK_EVENTS_CHANNEL, type TaskEventNotification } from "@glassbox/contracts";
-import { type Db, type TaskEventRow, type TaskRow, taskEvents, tasks } from "@glassbox/db";
+import {
+  type Db,
+  type ModelCallRow,
+  modelCalls,
+  type TaskEventRow,
+  type TaskRow,
+  type TaskStepRow,
+  taskEvents,
+  taskSteps,
+  tasks,
+} from "@glassbox/db";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 
 /**
@@ -316,6 +326,16 @@ export async function listRecentTasks(db: Db, limit: number): Promise<TaskRow[]>
 export async function getTaskById(db: Db, taskId: string): Promise<TaskRow | null> {
   const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
   return rows[0] ?? null;
+}
+
+/** 任务的 step trace(报告页/控制台回放用,按 step 顺序) */
+export async function listTaskSteps(db: Db, taskId: string): Promise<TaskStepRow[]> {
+  return db.select().from(taskSteps).where(eq(taskSteps.taskId, taskId)).orderBy(taskSteps.id);
+}
+
+/** 任务的模型调用 trace(成本/延迟可视用) */
+export async function listModelCalls(db: Db, taskId: string): Promise<ModelCallRow[]> {
+  return db.select().from(modelCalls).where(eq(modelCalls.taskId, taskId)).orderBy(modelCalls.id);
 }
 
 /** 回放/增量拉取:task 的事件流,按 id 全序 */

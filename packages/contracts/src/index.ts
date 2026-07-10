@@ -112,12 +112,22 @@ export const helloInputSchema = z.object({
 });
 export type HelloInput = z.infer<typeof helloInputSchema>;
 
-/** 提交任务请求(M0 仅 hello agent;未知 agentName 由 worker 显式失败,不在网关拦) */
-export const createTaskRequestSchema = z.object({
-  agentName: z.string().min(1).max(64).default("hello"),
-  input: helloInputSchema,
-  idempotencyKey: z.string().min(8).max(128).optional(),
-});
+/**
+ * 提交任务请求:按 agentName 判别输入契约。
+ * 未知 agentName 由 worker 显式失败(不在网关拦,保持队列语义单一)。
+ */
+export const createTaskRequestSchema = z.discriminatedUnion("agentName", [
+  z.object({
+    agentName: z.literal("hello"),
+    input: helloInputSchema,
+    idempotencyKey: z.string().min(8).max(128).optional(),
+  }),
+  z.object({
+    agentName: z.literal("research"),
+    input: researchInputSchema,
+    idempotencyKey: z.string().min(8).max(128).optional(),
+  }),
+]);
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
 
 /** 任务 DTO:API 出口形状(时间一律 ISO 字符串) */

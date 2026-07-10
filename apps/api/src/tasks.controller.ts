@@ -4,7 +4,14 @@ import {
   createTaskRequestSchema,
   type TaskDto,
 } from "@glassbox/contracts";
-import { enqueueTask, getTaskById, listEventsAfter, listRecentTasks } from "@glassbox/core";
+import {
+  enqueueTask,
+  getTaskById,
+  listEventsAfter,
+  listModelCalls,
+  listRecentTasks,
+  listTaskSteps,
+} from "@glassbox/core";
 import type { DbHandle, TaskRow } from "@glassbox/db";
 import {
   Body,
@@ -58,6 +65,35 @@ export class TasksController {
   async getById(@Param("id", uuidPipe) id: string): Promise<TaskDto> {
     const task = await this.findTask(id);
     return toTaskDto(task);
+  }
+
+  /** 任务的 trace:steps + model_calls(报告页/控制台展开用) */
+  @Get(":id/trace")
+  async trace(@Param("id", uuidPipe) id: string) {
+    await this.findTask(id);
+    const [steps, modelCalls] = await Promise.all([
+      listTaskSteps(this.dbh.db, id),
+      listModelCalls(this.dbh.db, id),
+    ]);
+    return {
+      steps: steps.map((s) => ({
+        name: s.name,
+        stepIndex: s.stepIndex,
+        status: s.status,
+        output: s.output,
+        startedAt: s.startedAt.toISOString(),
+        finishedAt: s.finishedAt?.toISOString() ?? null,
+      })),
+      modelCalls: modelCalls.map((m) => ({
+        provider: m.provider,
+        model: m.model,
+        purpose: m.purpose,
+        totalTokens: m.totalTokens,
+        costCny: m.costCny,
+        latencyMs: m.latencyMs,
+        status: m.status,
+      })),
+    };
   }
 
   /**

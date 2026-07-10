@@ -10,13 +10,17 @@ import {
   AlertTriangle,
   Check,
   Cpu,
+  FileText,
   History,
   Inbox,
+  ListTree,
   Loader2,
   type LucideIcon,
   Plus,
   RotateCcw,
+  Search,
   SendHorizontal,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -25,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { createTask, listTasks, taskEventsUrl } from "@/lib/api";
+import { type AgentKind, createTask, listTasks, taskEventsUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TERMINAL_STATUSES = new Set<TaskStatus>(["succeeded", "failed", "cancelled"]);
@@ -59,9 +63,51 @@ const EVENT_META: Record<string, { icon: LucideIcon; cls: string }> = {
   "task.requeued": { icon: RotateCcw, cls: "border-amber-500/40 text-amber-400" },
   "task.dead_lettered": { icon: AlertTriangle, cls: "border-red-500/40 text-red-400" },
   "hello.step": { icon: Sparkles, cls: "border-amber-500/40 text-amber-400" },
+  "agent.plan": { icon: ListTree, cls: "border-violet-500/40 text-violet-400" },
+  "agent.decide": { icon: Cpu, cls: "border-blue-500/40 text-blue-400" },
+  "agent.act": { icon: Sparkles, cls: "border-amber-500/40 text-amber-400" },
+  "agent.observe": { icon: Search, cls: "border-cyan-500/40 text-cyan-400" },
+  "agent.synthesize": { icon: FileText, cls: "border-emerald-500/40 text-emerald-400" },
+  "agent.verify": { icon: ShieldCheck, cls: "border-emerald-500/40 text-emerald-400" },
+  "model.call": { icon: Cpu, cls: "border-violet-500/40 text-violet-400" },
+  "tool.call": { icon: Search, cls: "border-cyan-500/40 text-cyan-400" },
   "task.succeeded": { icon: Check, cls: "border-emerald-500/40 text-emerald-400" },
   "task.failed": { icon: X, cls: "border-red-500/40 text-red-400" },
 };
+
+const RATING_STYLE: Record<"green" | "yellow" | "red", string> = {
+  green: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+  yellow: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  red: "border-red-500/40 bg-red-500/10 text-red-300",
+};
+const RATING_DOT: Record<"green" | "yellow" | "red", string> = {
+  green: "bg-emerald-400",
+  yellow: "bg-amber-400",
+  red: "bg-red-400",
+};
+
+interface ResearchReport {
+  claims: Array<{ text: string; citations: number[] }>;
+  summary: string;
+  verdicts: Array<{ claimIndex: number; rating: "green" | "yellow" | "red"; rationale: string }>;
+}
+
+/** 从终态事件的 payload 里抽出研究报告(synthesize + verify 两个事件) */
+function reportFromEvents(events: TaskEventDto[]): ResearchReport | null {
+  const done = events.find((e) => e.eventType === "task.succeeded");
+  const result = (done?.payload as { result?: unknown } | null)?.result as
+    | {
+        synthesis?: { claims?: unknown; summary?: unknown };
+        verdicts?: unknown;
+      }
+    | undefined;
+  if (!result?.synthesis || !Array.isArray(result.synthesis.claims)) return null;
+  return {
+    claims: result.synthesis.claims as ResearchReport["claims"],
+    summary: String(result.synthesis.summary ?? ""),
+    verdicts: Array.isArray(result.verdicts) ? (result.verdicts as ResearchReport["verdicts"]) : [],
+  };
+}
 
 function statusFromEvents(events: TaskEventDto[], fallback: TaskStatus): TaskStatus {
   for (let i = events.length - 1; i >= 0; i--) {
@@ -82,9 +128,10 @@ function statusFromEvents(events: TaskEventDto[], fallback: TaskStatus): TaskSta
 }
 
 function excerpt(request: unknown): string {
-  if (request && typeof request === "object" && "message" in request) {
-    const m = (request as { message?: unknown }).message;
-    if (typeof m === "string" && m.trim()) return m;
+  if (request && typeof request === "object") {
+    const r = request as { message?: unknown; question?: unknown };
+    const text = typeof r.question === "string" ? r.question : r.message;
+    if (typeof text === "string" && text.trim()) return text;
   }
   return "(无输入)";
 }
@@ -122,6 +169,7 @@ export function AgentWorkspace() {
   const [replay, setReplay] = useState(false);
   const [events, setEvents] = useState<TaskEventDto[]>([]);
   const [message, setMessage] = useState("");
+  const [agent, setAgent] = useState<AgentKind>("research");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -131,6 +179,7 @@ export function AgentWorkspace() {
   const status: TaskStatus = active ? statusFromEvents(events, active.status) : "queued";
   const greeting = greetingOf(events);
   const failedEvent = events.find((e) => e.eventType === "task.failed");
+  const report = reportFromEvents(events);
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -187,7 +236,7 @@ export function AgentWorkspace() {
       setSubmitting(true);
       setError(null);
       try {
-        const { task } = await createTask(trimmed);
+        const { task } = await createTask(trimmed, agent);
         setTasks((prev) => [task, ...prev.filter((t) => t.id !== task.id)]);
         setReplay(false);
         setActiveId(task.id);
@@ -198,7 +247,7 @@ export function AgentWorkspace() {
         setSubmitting(false);
       }
     },
-    [message, submitting],
+    [message, submitting, agent],
   );
 
   const selectTask = useCallback((task: TaskDto) => {
@@ -386,6 +435,62 @@ export function AgentWorkspace() {
                   {greeting}
                 </li>
               )}
+              {report && (
+                <li className="mt-6">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <FileText className="size-3.5" />
+                    引用级报告
+                    <span className="ml-auto flex items-center gap-3 font-normal">
+                      {(["green", "yellow", "red"] as const).map((r) => {
+                        const n = report.verdicts.filter((v) => v.rating === r).length;
+                        return (
+                          <span key={r} className="flex items-center gap-1">
+                            <span className={cn("size-2 rounded-full", RATING_DOT[r])} />
+                            {n}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {report.claims.map((claim, i) => {
+                      const verdict = report.verdicts.find((v) => v.claimIndex === i);
+                      const rating = verdict?.rating ?? "yellow";
+                      return (
+                        <li
+                          key={claim.text}
+                          className={cn("rounded-md border px-3 py-2.5", RATING_STYLE[rating])}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span
+                              className={cn(
+                                "mt-1.5 size-2 shrink-0 rounded-full",
+                                RATING_DOT[rating],
+                              )}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-foreground">
+                                {claim.text}
+                                <sup className="ml-1 font-mono text-[10px] text-muted-foreground">
+                                  [{claim.citations.join(",")}]
+                                </sup>
+                              </p>
+                              {verdict?.rationale && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {verdict.rationale}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-3 rounded-md border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+                    {report.summary}
+                  </p>
+                </li>
+              )}
               {failedEvent && (
                 <li className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {failedEvent.message ?? "任务失败"}
@@ -396,24 +501,53 @@ export function AgentWorkspace() {
         </div>
 
         <div className="shrink-0 border-t bg-background p-3">
-          <form onSubmit={submit} className="mx-auto flex max-w-2xl gap-2">
-            <Input
-              ref={inputRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder='把一句话交给 hello agent,例如"你是谁"'
-              maxLength={500}
-              disabled={submitting}
-            />
-            <Button type="submit" size="icon" disabled={submitting || !message.trim()}>
-              {submitting ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <SendHorizontal className="size-4" />
-              )}
-            </Button>
-          </form>
-          {error && <p className="mx-auto mt-1.5 max-w-2xl text-xs text-destructive">{error}</p>}
+          <div className="mx-auto max-w-2xl">
+            <div className="mb-2 flex gap-1">
+              {(
+                [
+                  { k: "research", label: "深度研究", desc: "拆解→检索→综合→核实" },
+                  { k: "hello", label: "hello", desc: "链路自检" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.k}
+                  type="button"
+                  onClick={() => setAgent(opt.k)}
+                  title={opt.desc}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs transition-colors",
+                    agent === opt.k
+                      ? "border-primary/50 bg-primary/10 text-foreground"
+                      : "border-transparent text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <form onSubmit={submit} className="flex gap-2">
+              <Input
+                ref={inputRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={
+                  agent === "research"
+                    ? "提一个研究问题,例如「为什么用 SKIP LOCKED 做队列」"
+                    : '把一句话交给 hello agent,例如"你是谁"'
+                }
+                maxLength={agent === "research" ? 1000 : 500}
+                disabled={submitting}
+              />
+              <Button type="submit" size="icon" disabled={submitting || !message.trim()}>
+                {submitting ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <SendHorizontal className="size-4" />
+                )}
+              </Button>
+            </form>
+            {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+          </div>
         </div>
       </main>
     </div>

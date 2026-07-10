@@ -1,14 +1,12 @@
 import { hostname } from "node:os";
-import { helloInputSchema } from "@glassbox/contracts";
 import {
-  appendEvent,
   claimNextTask,
   completeTask,
   errorMessage,
   failTask,
   heartbeatTask,
+  type ModelGateway,
   reapExpiredLeases,
-  saveCheckpoint,
   sleep,
 } from "@glassbox/core";
 import type { DbHandle, TaskRow } from "@glassbox/db";
@@ -19,7 +17,7 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from "@nestjs/common";
-import { z } from "zod";
+import { type AgentContext, buildGateway, LeaseLostError, resolveAgent } from "./agents.js";
 import { DB } from "./db.provider.js";
 import { intEnv } from "./env.js";
 
@@ -28,18 +26,13 @@ const IDLE_POLL_MS = intEnv("WORKER_IDLE_POLL_MS", 1_000);
 const LEASE_SECONDS = intEnv("WORKER_LEASE_SECONDS", 60);
 const HEARTBEAT_MS = Math.max(500, Math.floor((LEASE_SECONDS / 3) * 1_000));
 const REAP_INTERVAL_MS = intEnv("WORKER_REAP_INTERVAL_MS", 5_000);
-const HELLO_STEPS = 3;
-const HELLO_STEP_MS = intEnv("HELLO_STEP_MS", 400);
-
-/** hello agent 的检查点:最后一个已完成的 step */
-const helloCheckpointSchema = z.object({ step: z.number().int().min(0).max(HELLO_STEPS) });
 
 /**
- * 认领循环 + 租约生命周期 + 检查点续跑:
- *  - 执行期间按租约 1/3 周期心跳;心跳失败即自知僵尸,放弃后续写入(守卫兜底);
+ * 认领循环 + 租约生命周期。具体 agent 逻辑分派到 agents.ts。
+ *  - 执行期间按租约 1/3 周期心跳;心跳失败即自知僵尸,让出并放弃写入(守卫兜底);
  *  - 每个 worker 顺带周期跑 reaper;
- *  - 每完成一步写检查点,重投递后从断点续跑(step 事件的重复被压到至多一步);
- *  - 优雅退出:停机不再认领,跑完手头任务;SIGKILL 则靠租约过期 + reaper 收尸。
+ *  - 优雅退出:停机不再认领,跑完手头任务;SIGKILL 靠租约过期 + reaper 收尸。
+ * M1 仍欠:park/resume(waiting_* 三态)、LISTEN 唤醒、并发槽位(p-limit)。
  */
 @Injectable()
 export class WorkerService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -48,8 +41,11 @@ export class WorkerService implements OnApplicationBootstrap, OnApplicationShutd
   private stopping = false;
   private loop: Promise<void> | null = null;
   private lastReapAt = 0;
+  private gateway: ModelGateway;
 
-  constructor(@Inject(DB) private readonly dbh: DbHandle) {}
+  constructor(@Inject(DB) private readonly dbh: DbHandle) {
+    this.gateway = buildGateway(dbh);
+  }
 
   onApplicationBootstrap(): void {
     this.loop = this.runLoop();
@@ -100,6 +96,12 @@ export class WorkerService implements OnApplicationBootstrap, OnApplicationShutd
   }
 
   private async execute(task: TaskRow): Promise<void> {
+    const handler = resolveAgent(task.agentName);
+    if (!handler) {
+      await this.finishFail(task.id, `unknown agent "${task.agentName}"`);
+      return;
+    }
+
     let leaseLost = false;
     const heartbeat = setInterval(() => {
       void heartbeatTask(this.dbh.db, {
@@ -117,42 +119,21 @@ export class WorkerService implements OnApplicationBootstrap, OnApplicationShutd
     }, HEARTBEAT_MS);
 
     try {
-      if (task.agentName !== "hello") {
-        await this.finishFail(task.id, `unknown agent "${task.agentName}"`);
-        return;
-      }
-      try {
-        const input = helloInputSchema.parse(task.request);
-        // 检查点续跑:重投递的任务从断点继续,不从头再来
-        const parsedCp = helloCheckpointSchema.safeParse(task.checkpoint);
-        const startStep = parsedCp.success ? parsedCp.data.step : 0;
-        if (startStep > 0) {
-          this.logger.log(`task ${task.id} resuming from checkpoint step ${startStep}`);
-        }
-        for (let step = startStep + 1; step <= HELLO_STEPS; step++) {
-          if (leaseLost) return;
-          await sleep(HELLO_STEP_MS);
-          await appendEvent(this.dbh.db, {
-            taskId: task.id,
-            eventType: "hello.step",
-            message: `step ${step}/${HELLO_STEPS}`,
-            payload: { step, total: HELLO_STEPS },
-          });
-          await saveCheckpoint(this.dbh.db, task.id, this.workerId, { step });
-        }
-        const result = {
-          greeting: `Hello, ${input.message}!`,
-          steps: HELLO_STEPS,
-          workerId: this.workerId,
-          resumedFromStep: startStep,
-        };
-        const done = await completeTask(this.dbh.db, task.id, this.workerId, result);
-        this.logger.log(
-          done ? `task ${task.id} succeeded` : `task ${task.id} terminal write skipped (zombie)`,
-        );
-      } catch (err) {
-        await this.finishFail(task.id, errorMessage(err));
-      }
+      const ctx: AgentContext = {
+        dbh: this.dbh,
+        task,
+        isLeaseLost: () => leaseLost,
+        gateway: this.gateway,
+      };
+      const result = await handler(ctx);
+      if (leaseLost) return; // 让出:终态由新持有者负责
+      const done = await completeTask(this.dbh.db, task.id, this.workerId, result);
+      this.logger.log(
+        done ? `task ${task.id} succeeded` : `task ${task.id} terminal write skipped (zombie)`,
+      );
+    } catch (err) {
+      if (err instanceof LeaseLostError) return;
+      await this.finishFail(task.id, errorMessage(err));
     } finally {
       clearInterval(heartbeat);
     }
