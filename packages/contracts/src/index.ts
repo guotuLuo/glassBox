@@ -39,13 +39,24 @@ export const KNOWN_TASK_EVENT_TYPES = [
   "agent.decide",
   "agent.act",
   "agent.observe",
+  "agent.fanout",
+  "agent.subquery",
   "agent.synthesize",
   "agent.verify",
+  "memory.recall",
+  "memory.write",
   "model.call",
   "tool.call",
   "task.succeeded",
   "task.failed",
 ] as const;
+
+/** plan 步:把课题拆成 2–4 个子问题(fan-out) */
+export const subQuestionPlanSchema = z.object({
+  rationale: z.string().max(1000),
+  subQuestions: z.array(z.string().min(1).max(300)).min(1).max(4),
+});
+export type SubQuestionPlan = z.infer<typeof subQuestionPlanSchema>;
 
 // ---------------- agent 循环契约(M2:planner 的结构化输出) ----------------
 

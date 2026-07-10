@@ -22,6 +22,13 @@
       "when": 1783650735615,
       "tag": "0002_mushy_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783661023148,
+      "tag": "0003_sharp_lionheart",
+      "breakpoints": true
     }
   ]
 }

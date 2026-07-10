@@ -1,5 +1,7 @@
 // runtime 库:queue / agent / tools / model / rag / memory / security(按 EMAgent 映射逐阶段移植,总纲 §6)
+export * from "./agent/deep-research.js";
 export * from "./agent/research-agent.js";
+export * from "./memory/memory.js";
 export * from "./model/adapter.js";
 export * from "./model/env.js";
 export * from "./model/gateway.js";

@@ -22,3 +22,4 @@ export type ToolCallRow = typeof schema.toolCalls.$inferSelect;
 export type DocumentRow = typeof schema.documents.$inferSelect;
 export type DocumentChunkRow = typeof schema.documentChunks.$inferSelect;
 export type RagEvalRunRow = typeof schema.ragEvalRuns.$inferSelect;
+export type MemoryRow = typeof schema.memories.$inferSelect;

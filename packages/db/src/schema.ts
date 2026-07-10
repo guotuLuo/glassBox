@@ -167,6 +167,26 @@ export const documentChunks = pgTable(
   (t) => [index("ix_chunks_document").on(t.documentId)],
 );
 
+/**
+ * 长期记忆(M4;EMAgent memory 移植):owner 隔离、声明式 + 程序性双记忆。
+ * 写入去重(相似度阈值)、召回相关性下限、按 owner 容量上限 —— 逻辑在 core/memory。
+ * 复用 M3 的嵌入(同 1024 维向量)。
+ */
+export const memories = pgTable(
+  "memories",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    ownerId: text("owner_id").notNull(),
+    kind: text("kind").notNull(), // declarative | procedural
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIM }).notNull(),
+    uses: integer("uses").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [index("ix_memories_owner").on(t.ownerId)],
+);
+
 /** RAG 评测基线:每次评测跑分入库,可追踪召回率曲线(总纲 M3 验收) */
 export const ragEvalRuns = pgTable("rag_eval_runs", {
   id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
