@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "start": "tsx src/main.ts",
+    "seed:rag": "tsx src/seed-rag.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -19,10 +20,12 @@
     "@glassbox/contracts": "workspace:*",
     "@glassbox/core": "workspace:*",
     "@glassbox/db": "workspace:*",
+    "@glassbox/eval": "workspace:*",
     "@nestjs/common": "^11.1.27",
     "@nestjs/core": "^11.1.27",
     "@nestjs/platform-express": "^11.1.27",
     "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",

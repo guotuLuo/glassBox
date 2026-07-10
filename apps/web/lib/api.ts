@@ -41,3 +41,36 @@ export async function getTask(taskId: string): Promise<TaskDto> {
 export function taskEventsUrl(taskId: string): string {
   return `${API_BASE}/api/tasks/${taskId}/events`;
 }
+
+// ---------------- RAG 召回 playground ----------------
+
+export interface RagCandidate {
+  chunkId: number;
+  documentTitle: string;
+  source: string;
+  content: string;
+  vectorRank: number | null;
+  vectorScore: number | null;
+  ftsRank: number | null;
+  ftsScore: number | null;
+  fusedScore: number;
+  finalRank: number;
+}
+
+export interface RagSearchResponse {
+  query: string;
+  embedder: string;
+  candidates: RagCandidate[];
+}
+
+export async function ragSearch(q: string, k = 8): Promise<RagSearchResponse> {
+  const res = await fetch(`${API_BASE}/api/rag/search?q=${encodeURIComponent(q)}&k=${k}`);
+  if (!res.ok) throw new Error(`检索失败:HTTP ${res.status}`);
+  return (await res.json()) as RagSearchResponse;
+}
+
+export async function ragStats(): Promise<{ documents: number; chunks: number }> {
+  const res = await fetch(`${API_BASE}/api/rag/stats`);
+  if (!res.ok) throw new Error(`统计失败:HTTP ${res.status}`);
+  return (await res.json()) as { documents: number; chunks: number };
+}

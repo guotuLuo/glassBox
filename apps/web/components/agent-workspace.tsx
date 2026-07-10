@@ -24,6 +24,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -324,6 +325,13 @@ export function AgentWorkspace() {
             ))}
           </ul>
         </ScrollArea>
+        <Link
+          href="/playground"
+          className="flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Search className="size-3.5" />
+          召回 Playground
+        </Link>
         <div className="border-t px-4 py-3 text-[10px] text-muted-foreground">
           事件源:PG LISTEN/NOTIFY → SSE
         </div>

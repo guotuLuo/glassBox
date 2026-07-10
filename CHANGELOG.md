@@ -2,6 +2,30 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号在 M1 公开上线后启用 SemVer。
 
+## [Unreleased] — M3 RAG 召回(进行中)
+
+### Added
+
+- RAG 库表:documents / document_chunks(vector(1024) + bigram_doc)/ rag_eval_runs;HNSW cosine 索引 + GIN FTS 表达式索引(2026-07-10)
+- 摄取管线:滑窗分块(句边界对齐)→ 嵌入 → 落库;嵌入 provider 抽象(本地 bigram 词法桩默认 + openai-compat/bge-m3 真路径,维度 1024 对齐、切换免迁移)(2026-07-10)
+- 中文 FTS:CJK 字符 bigram 分词,同一套 token 喂 FTS 与本地嵌入(2026-07-10)
+- 混合检索:向量近邻 + FTS,RRF 融合,每候选带分路 rank/score 诊断(2026-07-10)
+- 召回 playground(`/playground`):查询→候选表格,向量/FTS/融合分并排,分路命中可视(2026-07-10)
+- RAG 评测:hit-rate@3/@5 + MRR,vector/fts/hybrid 三路对比,跑分入库形成可追踪基线(2026-07-10)
+- API:POST /api/rag/ingest、GET /api/rag/search、GET /api/rag/stats;演示语料 seed 脚本(2026-07-10)
+- ADR-004(混合检索 + 本地词法嵌入)(2026-07-10)
+
+### 测试
+
+- RAG 集成测试(testcontainers)×5:摄取、向量/FTS/混合检索、RRF 单调、两路>单路
+- RAG 评测测试 ×2:三路指标计算、混合不低于单路、跑分入库
+- 端到端:seed 6 文档,playground 查"worker 崩溃恢复"→ lease/checkpoint 经 RRF 居首
+
+### 诚实边界
+
+- 本地嵌入是词法桩(bigram),语义召回弱;向量列质量待 SiliconFlow bge-m3 key,融合/FTS/诊断/评测与嵌入无关
+- rerank(交叉编码)暂缺,接口位已留,key 到位或需要时补
+
 ## [Unreleased] — M2 编排与工具(进行中)
 
 ### Added

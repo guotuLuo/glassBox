@@ -7,9 +7,17 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5"
+    "@testcontainers/postgresql": "^12.0.4",
+    "drizzle-orm": "^0.45.2",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@glassbox/core": "workspace:*",
+    "@glassbox/db": "workspace:*"
   }
 }
