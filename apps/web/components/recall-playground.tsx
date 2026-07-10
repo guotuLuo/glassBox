@@ -69,16 +69,19 @@ export function RecallPlayground() {
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <header className="mb-6 flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-blue-600 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
           G
         </div>
         <div className="flex-1">
           <h1 className="text-xl font-semibold tracking-tight">召回 Playground</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             混合检索诊断:向量近邻 + 全文检索(bigram)→ RRF 融合,分路排名/分数并排可见
           </p>
         </div>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/"
+          className="rounded-lg border border-border/70 px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
           ← 工作台
         </Link>
       </header>

@@ -29,7 +29,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { type AgentKind, createTask, listTasks, taskEventsUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -77,11 +76,6 @@ const EVENT_META: Record<string, { icon: LucideIcon; cls: string }> = {
   "task.failed": { icon: X, cls: "border-red-500/40 text-red-400" },
 };
 
-const RATING_STYLE: Record<"green" | "yellow" | "red", string> = {
-  green: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
-  yellow: "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  red: "border-red-500/40 bg-red-500/10 text-red-300",
-};
 const RATING_DOT: Record<"green" | "yellow" | "red", string> = {
   green: "bg-emerald-400",
   yellow: "bg-amber-400",
@@ -174,7 +168,7 @@ export function AgentWorkspace() {
   const [agent, setAgent] = useState<AgentKind>("research");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const active = tasks.find((t) => t.id === activeId) ?? null;
@@ -267,37 +261,35 @@ export function AgentWorkspace() {
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-foreground">
       {/* 侧边栏 */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar md:flex">
-        <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground">
+      <aside className="hidden w-[264px] shrink-0 flex-col border-r border-border/60 bg-sidebar md:flex">
+        <div className="flex items-center gap-2.5 px-4 pt-4 pb-3.5">
+          <div className="flex size-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-primary to-blue-600 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
             G
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold tracking-tight">GlassBox</div>
-            <div className="truncate text-[10px] text-muted-foreground">可验证的深度研究引擎</div>
+            <div className="truncate text-[10.5px] text-muted-foreground">可验证的深度研究引擎</div>
           </div>
-          <Badge variant="outline" className="text-[10px]">
-            M0
-          </Badge>
         </div>
-        <div className="px-3 pb-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2"
+        <div className="px-3 pb-1">
+          <button
+            type="button"
             onClick={newTask}
+            className="flex w-full items-center gap-2 rounded-lg border border-border/70 bg-card/40 px-3 py-2 text-sm font-medium text-foreground/90 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:text-foreground"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-4 text-primary" />
             新任务
-          </Button>
+          </button>
         </div>
-        <div className="px-4 pt-2 pb-1 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
+        <div className="px-4 pt-4 pb-1.5 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-[0.08em]">
           最近任务
         </div>
         <ScrollArea className="min-h-0 flex-1 px-2 pb-2">
           <ul className="flex flex-col gap-0.5">
             {tasks.length === 0 && (
-              <li className="px-2.5 py-6 text-center text-xs text-muted-foreground">还没有任务</li>
+              <li className="px-2.5 py-6 text-center text-xs text-muted-foreground/70">
+                还没有任务
+              </li>
             )}
             {tasks.map((task) => (
               <li key={task.id}>
@@ -305,19 +297,29 @@ export function AgentWorkspace() {
                   type="button"
                   onClick={() => selectTask(task)}
                   className={cn(
-                    "w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent",
-                    activeId === task.id && "bg-accent",
+                    "group relative w-full rounded-lg px-2.5 py-2 text-left transition-colors",
+                    activeId === task.id
+                      ? "bg-accent/80 text-foreground"
+                      : "text-foreground/80 hover:bg-accent/50",
                   )}
                 >
+                  {activeId === task.id && (
+                    <span className="absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-primary" />
+                  )}
                   <div className="flex items-center gap-2">
                     <span
-                      className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[task.status])}
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full ring-2 ring-transparent",
+                        STATUS_DOT[task.status],
+                      )}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm">{excerpt(task.request)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px]">
+                      {excerpt(task.request)}
+                    </span>
                   </div>
-                  <div className="mt-0.5 flex justify-between pl-3.5 text-[10px] text-muted-foreground">
+                  <div className="mt-1 flex justify-between pl-3.5 text-[10px] text-muted-foreground/70">
                     <span>{STATUS_LABEL[task.status]}</span>
-                    <span className="font-mono">
+                    <span className="font-mono tabular-nums">
                       {new Date(task.createdAt).toLocaleTimeString("zh-CN", { hour12: false })}
                     </span>
                   </div>
@@ -328,24 +330,30 @@ export function AgentWorkspace() {
         </ScrollArea>
         <Link
           href="/playground"
-          className="flex items-center gap-2 border-t px-4 py-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
         >
           <Search className="size-3.5" />
           召回 Playground
         </Link>
-        <div className="border-t px-4 py-3 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 border-t border-border/60 px-4 py-2.5 text-[10px] text-muted-foreground/70">
+          <span className="size-1.5 rounded-full bg-emerald-400/80" />
           事件源:PG LISTEN/NOTIFY → SSE
         </div>
       </aside>
 
       {/* 主区 */}
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2.5 border-b px-4">
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        {/* 顶部氛围光 */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/[0.06] to-transparent" />
+        <header className="relative flex h-12 shrink-0 items-center gap-2.5 border-b border-border/60 px-4 backdrop-blur-sm">
           {active ? (
             <>
-              <span className="truncate font-mono text-xs text-muted-foreground">{active.id}</span>
+              <span className="flex items-center gap-1.5 truncate font-mono text-[11px] text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+                {active.id}
+              </span>
               {replay && (
-                <Badge variant="outline" className="gap-1 text-[10px]">
+                <Badge variant="outline" className="gap-1 border-border/70 text-[10px]">
                   <History className="size-3" />
                   回放
                 </Badge>
@@ -357,24 +365,34 @@ export function AgentWorkspace() {
             <>
               <span className="text-sm font-medium">工作台</span>
               <div className="flex-1" />
-              <span className="text-xs text-muted-foreground">
+              <span className="hidden font-mono text-[11px] text-muted-foreground/70 sm:inline">
                 提交 → 入队 → SKIP LOCKED 认领 → 事件回流
               </span>
             </>
           )}
         </header>
 
-        <div ref={timelineRef} className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div ref={timelineRef} className="relative min-h-0 flex-1 overflow-y-auto px-6 py-6">
           {!active && (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-primary text-lg font-semibold text-primary-foreground">
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-blue-600 text-xl font-bold text-primary-foreground shadow-xl shadow-primary/25">
                 G
               </div>
-              <div className="text-sm font-medium">把一句话交给 agent</div>
-              <p className="max-w-sm text-xs leading-5 text-muted-foreground">
-                每一步都写进事件表,实时流到这里;历史任务随时点开回放—— 这是"玻璃盒"的第一块地基。M0
-                阶段由 hello agent 演示链路。
+              <div className="text-base font-semibold tracking-tight">把一句话交给 agent</div>
+              <p className="max-w-md text-[13px] leading-6 text-muted-foreground">
+                每一步都写进事件表,实时流到这里;历史任务随时点开回放——
+                这是"玻璃盒"的地基:整个思考过程可看、可回放、每句话可溯源。
               </p>
+              <div className="mt-1 flex flex-wrap justify-center gap-2 text-[11px] text-muted-foreground/70">
+                {["拆解课题", "并行检索", "跨源综合", "独立核实"].map((t, i) => (
+                  <span key={t} className="flex items-center gap-2">
+                    {i > 0 && <span className="text-muted-foreground/40">→</span>}
+                    <span className="rounded-md border border-border/60 bg-card/40 px-2 py-1">
+                      {t}
+                    </span>
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
@@ -399,37 +417,42 @@ export function AgentWorkspace() {
                 return (
                   <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
                     {i < events.length - 1 && (
-                      <span className="absolute top-7 bottom-0 left-[13px] w-px bg-border" />
+                      <span className="absolute top-7 bottom-0 left-[13.5px] w-px bg-border/70" />
                     )}
                     <span
                       className={cn(
-                        "z-10 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background",
+                        "z-10 flex size-7 shrink-0 items-center justify-center rounded-full border bg-card/80 backdrop-blur-sm",
                         meta.cls,
                       )}
                     >
                       <Icon className="size-3.5" />
                     </span>
-                    <div className="min-w-0 flex-1 pt-1">
+                    <div className="min-w-0 flex-1 pt-0.5">
                       <div className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-mono text-xs font-medium">{event.eventType}</span>
-                        <span className="font-mono text-[10px] text-muted-foreground">
+                        <span className="font-mono text-xs font-medium text-foreground/90">
+                          {event.eventType}
+                        </span>
+                        <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
                           {formatClock(event.createdAt)}
                         </span>
                         {delta !== null && (
-                          <span className="font-mono text-[10px] text-muted-foreground/60">
+                          <span className="rounded bg-muted/50 px-1 font-mono text-[10px] text-muted-foreground/70 tabular-nums">
                             +{delta}ms
                           </span>
                         )}
                       </div>
                       {event.message && (
-                        <p className="mt-0.5 text-sm text-muted-foreground">{event.message}</p>
+                        <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">
+                          {event.message}
+                        </p>
                       )}
                       {event.payload !== null && event.payload !== undefined && (
-                        <details className="mt-1">
-                          <summary className="cursor-pointer text-[10px] text-muted-foreground/70 select-none">
+                        <details className="mt-1 group">
+                          <summary className="inline-flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground/60 transition-colors select-none hover:text-muted-foreground">
+                            <span className="transition-transform group-open:rotate-90">▸</span>
                             payload
                           </summary>
-                          <pre className="mt-1 overflow-x-auto rounded-md border bg-muted/30 p-2 font-mono text-[11px] leading-4">
+                          <pre className="mt-1 overflow-x-auto rounded-lg border border-border/60 bg-black/20 p-2.5 font-mono text-[11px] leading-4.5 text-muted-foreground">
                             {JSON.stringify(event.payload, null, 2)}
                           </pre>
                         </details>
@@ -440,29 +463,29 @@ export function AgentWorkspace() {
               })}
 
               {greeting && (
-                <li className="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-300">
+                <li className="mt-4 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3 text-sm font-medium text-emerald-300">
                   {greeting}
                 </li>
               )}
               {report && (
-                <li className="mt-6">
-                  <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <FileText className="size-3.5" />
+                <li className="mt-7 rounded-xl border border-border/70 bg-card/50 p-4">
+                  <div className="mb-3.5 flex items-center gap-2 text-[13px] font-semibold">
+                    <FileText className="size-4 text-primary" />
                     引用级报告
                     {active && (
                       <Link
                         href={`/report/${active.id}`}
-                        className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        className="flex items-center gap-1 rounded-md border border-border/70 px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground"
                       >
                         <Link2 className="size-3" />
                         分享页
                       </Link>
                     )}
-                    <span className="ml-auto flex items-center gap-3 font-normal">
+                    <span className="ml-auto flex items-center gap-2.5 text-xs font-normal">
                       {(["green", "yellow", "red"] as const).map((r) => {
                         const n = report.verdicts.filter((v) => v.rating === r).length;
                         return (
-                          <span key={r} className="flex items-center gap-1">
+                          <span key={r} className="flex items-center gap-1 tabular-nums">
                             <span className={cn("size-2 rounded-full", RATING_DOT[r])} />
                             {n}
                           </span>
@@ -477,24 +500,29 @@ export function AgentWorkspace() {
                       return (
                         <li
                           key={claim.text}
-                          className={cn("rounded-md border px-3 py-2.5", RATING_STYLE[rating])}
+                          className={cn(
+                            "rounded-lg border-l-2 bg-card/60 py-2.5 pr-3 pl-3 transition-colors",
+                            rating === "green" && "border-l-emerald-400/70",
+                            rating === "yellow" && "border-l-amber-400/70",
+                            rating === "red" && "border-l-red-400/70",
+                          )}
                         >
-                          <div className="flex items-start gap-2">
+                          <div className="flex items-start gap-2.5">
                             <span
                               className={cn(
-                                "mt-1.5 size-2 shrink-0 rounded-full",
+                                "mt-1 size-2 shrink-0 rounded-full",
                                 RATING_DOT[rating],
                               )}
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm text-foreground">
+                              <p className="text-[13.5px] leading-6 text-foreground/95">
                                 {claim.text}
-                                <sup className="ml-1 font-mono text-[10px] text-muted-foreground">
+                                <sup className="ml-1 font-mono text-[10px] text-primary/80">
                                   [{claim.citations.join(",")}]
                                 </sup>
                               </p>
                               {verdict?.rationale && (
-                                <p className="mt-1 text-xs text-muted-foreground">
+                                <p className="mt-1 text-[11.5px] leading-5 text-muted-foreground">
                                   {verdict.rationale}
                                 </p>
                               )}
@@ -504,13 +532,13 @@ export function AgentWorkspace() {
                       );
                     })}
                   </ul>
-                  <p className="mt-3 rounded-md border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+                  <p className="mt-3 rounded-lg bg-muted/40 px-3.5 py-3 text-[13px] leading-6 text-muted-foreground">
                     {report.summary}
                   </p>
                 </li>
               )}
               {failedEvent && (
-                <li className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <li className="mt-4 rounded-lg border border-destructive/25 bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
                   {failedEvent.message ?? "任务失败"}
                 </li>
               )}
@@ -518,53 +546,75 @@ export function AgentWorkspace() {
           )}
         </div>
 
-        <div className="shrink-0 border-t bg-background p-3">
+        <div className="relative shrink-0 px-4 pt-2 pb-4">
           <div className="mx-auto max-w-2xl">
-            <div className="mb-2 flex gap-1">
-              {(
-                [
-                  { k: "research", label: "深度研究", desc: "拆解→检索→综合→核实" },
-                  { k: "hello", label: "hello", desc: "链路自检" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.k}
-                  type="button"
-                  onClick={() => setAgent(opt.k)}
-                  title={opt.desc}
-                  className={cn(
-                    "rounded-md border px-2.5 py-1 text-xs transition-colors",
-                    agent === opt.k
-                      ? "border-primary/50 bg-primary/10 text-foreground"
-                      : "border-transparent text-muted-foreground hover:bg-accent",
-                  )}
+            <form
+              onSubmit={submit}
+              className="rounded-2xl border border-border/70 bg-card/70 p-2 shadow-lg shadow-black/20 backdrop-blur-sm transition-colors focus-within:border-primary/45"
+            >
+              <div className="mb-2 flex items-center gap-1 px-1">
+                <div className="flex rounded-lg bg-muted/60 p-0.5">
+                  {(
+                    [
+                      { k: "research", label: "深度研究" },
+                      { k: "hello", label: "hello" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.k}
+                      type="button"
+                      onClick={() => setAgent(opt.k)}
+                      className={cn(
+                        "rounded-[7px] px-2.5 py-1 text-[11.5px] font-medium transition-all",
+                        agent === opt.k
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="ml-1 text-[10.5px] text-muted-foreground/70">
+                  {agent === "research" ? "拆解 → 检索 → 综合 → 核实" : "链路自检 · 不调模型"}
+                </span>
+              </div>
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={inputRef}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void submit(e as unknown as React.FormEvent);
+                    }
+                  }}
+                  rows={1}
+                  placeholder={
+                    agent === "research"
+                      ? "提一个研究问题,例如「为什么用 SKIP LOCKED 做队列」"
+                      : '把一句话交给 hello agent,例如"你是谁"'
+                  }
+                  maxLength={agent === "research" ? 1000 : 500}
+                  disabled={submitting}
+                  className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={submitting || !message.trim()}
+                  className="size-9 shrink-0 rounded-xl"
                 >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <form onSubmit={submit} className="flex gap-2">
-              <Input
-                ref={inputRef}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={
-                  agent === "research"
-                    ? "提一个研究问题,例如「为什么用 SKIP LOCKED 做队列」"
-                    : '把一句话交给 hello agent,例如"你是谁"'
-                }
-                maxLength={agent === "research" ? 1000 : 500}
-                disabled={submitting}
-              />
-              <Button type="submit" size="icon" disabled={submitting || !message.trim()}>
-                {submitting ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <SendHorizontal className="size-4" />
-                )}
-              </Button>
+                  {submitting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <SendHorizontal className="size-4" />
+                  )}
+                </Button>
+              </div>
             </form>
-            {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+            {error && <p className="mt-1.5 px-1 text-xs text-destructive">{error}</p>}
           </div>
         </div>
       </main>
