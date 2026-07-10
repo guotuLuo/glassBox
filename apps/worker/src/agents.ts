@@ -2,7 +2,10 @@ import { helloInputSchema, researchInputSchema } from "@glassbox/contracts";
 import {
   appendEvent,
   createModelGateway,
+  createRagSearchTool,
   createSearchTool,
+  type EmbeddingProvider,
+  embeddingFromEnv,
   type ModelGateway,
   runResearchAgent,
   saveCheckpoint,
@@ -10,7 +13,8 @@ import {
   ToolRegistry,
   tiersFromEnv,
 } from "@glassbox/core";
-import type { DbHandle, TaskRow } from "@glassbox/db";
+import { type DbHandle, documentChunks, type TaskRow } from "@glassbox/db";
+import { sql } from "drizzle-orm";
 import { intEnv } from "./env.js";
 
 const HELLO_STEPS = 3;
@@ -33,6 +37,14 @@ export function buildGateway(dbh: DbHandle): ModelGateway {
   return createModelGateway({ tiers: tiersFromEnv(), db: dbh.db });
 }
 
+const embedder: EmbeddingProvider = embeddingFromEnv();
+
+/** 语料库有内容就用 RAG 检索,否则回落到内置桩语料(保证 agent 永远有据可查) */
+async function buildSearchTool(dbh: DbHandle) {
+  const [row] = await dbh.db.select({ n: sql<number>`count(*)::int` }).from(documentChunks);
+  return (row?.n ?? 0) > 0 ? createRagSearchTool(dbh.db, embedder) : createSearchTool();
+}
+
 const helloHandler: AgentHandler = async ({ dbh, task, isLeaseLost }) => {
   const input = helloInputSchema.parse(task.request);
   const cp = task.checkpoint as { step?: number } | null;
@@ -53,7 +65,7 @@ const helloHandler: AgentHandler = async ({ dbh, task, isLeaseLost }) => {
 
 const researchHandler: AgentHandler = async ({ dbh, task, gateway }) => {
   const { question } = researchInputSchema.parse(task.request);
-  const tools = new ToolRegistry().register(createSearchTool());
+  const tools = new ToolRegistry().register(await buildSearchTool(dbh));
   const emit = async (eventType: string, message: string, payload?: unknown) => {
     await appendEvent(dbh.db, { taskId: task.id, eventType, message, payload });
   };

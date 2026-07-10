@@ -10,6 +10,7 @@ export * from "./rag/embed.js";
 export * from "./rag/ingest.js";
 export * from "./rag/retrieve.js";
 export * from "./rag/tokenize.js";
+export * from "./tools/rag-search.js";
 export * from "./tools/registry.js";
 export * from "./tools/search.js";
 export * from "./tools/ssrf.js";
