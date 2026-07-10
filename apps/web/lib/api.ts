@@ -74,3 +74,36 @@ export async function ragStats(): Promise<{ documents: number; chunks: number }>
   if (!res.ok) throw new Error(`统计失败:HTTP ${res.status}`);
   return (await res.json()) as { documents: number; chunks: number };
 }
+
+// ---------------- 研究报告(分享页) ----------------
+
+export interface ResearchReportData {
+  question: string;
+  subQuestions?: string[];
+  synthesis: { claims: Array<{ text: string; citations: number[] }>; summary: string };
+  verdicts: Array<{ claimIndex: number; rating: "green" | "yellow" | "red"; rationale: string }>;
+  sources: Array<{ id: number; title: string; url: string; snippet: string }>;
+}
+
+export interface ReportResponse {
+  id: string;
+  status: TaskDto["status"];
+  question: string;
+  createdAt: string;
+  report: ResearchReportData | null;
+}
+
+export async function getReport(taskId: string): Promise<ReportResponse> {
+  const res = await fetch(`${API_BASE}/api/tasks/${taskId}`);
+  if (!res.ok) throw new Error(`报告加载失败:HTTP ${res.status}`);
+  const task = taskDtoSchema.parse(await res.json());
+  const result = task.result as ResearchReportData | null;
+  const request = task.request as { question?: string } | null;
+  return {
+    id: task.id,
+    status: task.status,
+    question: request?.question ?? result?.question ?? "",
+    createdAt: task.createdAt,
+    report: result?.synthesis ? result : null,
+  };
+}

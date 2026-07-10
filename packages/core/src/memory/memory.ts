@@ -18,7 +18,12 @@ export interface MemoryConfig {
   perOwnerCap?: number; // 每 owner 记忆条数上限
 }
 
-const DEFAULTS = { dedupThreshold: 0.92, recallFloor: 0.35, perOwnerCap: 200 };
+/**
+ * recallFloor 默认 0.15:适配本地 bigram 词法嵌入 —— 同域改写的相似度约 0.2,纯噪声约 0。
+ * 诚实声明:换语义嵌入(bge-m3)后改写相似度升到 ~0.6,应把 floor 提到 ~0.35–0.5;
+ * 故 floor 与 embedder 绑定,经 MEMORY_RECALL_FLOOR 可覆盖。
+ */
+const DEFAULTS = { dedupThreshold: 0.92, recallFloor: 0.15, perOwnerCap: 200 };
 
 export interface RecalledMemory {
   id: number;

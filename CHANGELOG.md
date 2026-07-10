@@ -2,6 +2,28 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号在 M1 公开上线后启用 SemVer。
 
+## [Unreleased] — M4 旗舰体验(进行中)
+
+### Added
+
+- fan-out 深度研究 agent:plan 拆 2–4 子问题 → 并行多源检索 → 跨子问题综合(带引用)→ 独立模型红黄绿核实;每个子问题事件流独立可见(2026-07-10)
+- 长期记忆(memories 表 + core/memory):owner 隔离、写入去重、召回相关性下限、按 owner 容量上限(最久未用淘汰),声明式/程序性双记忆,复用 M3 嵌入 + HNSW(2026-07-10)
+- 记忆闭环:研究完成沉淀绿标结论,后续相关课题在 plan 步召回(memory.recall 事件可见)(2026-07-10)
+- 报告分享页(`/report/[id]`):公开只读,子问题 + 论断红黄绿 + 引用锚点跳转来源 + 摘要 + 复制分享链接(2026-07-10)
+- ADR-005(fan-out + 长期记忆)(2026-07-10)
+
+### 测试
+
+- 深度研究 fan-out(脚本网关,确定性):拆解、并行检索、步骤入库、memory.recall/fanout/subquery 事件
+- 长期记忆:owner 隔离、写入去重、召回下限、容量淘汰
+- 端到端(真 GPT 中转):研究"耐久队列不丢任务"→ 4 子问题/5 源/19 论断全绿 → 沉淀 3 记忆;后续课题召回 3 条;报告页公开渲染
+
+### 诚实边界
+
+- fan-out 为进程内并行,非耐久子任务(parent/child park/resume);schema parent_task_id 已预留
+- 记忆召回质量受本地词法嵌入限制,floor 随 embedder 调(MEMORY_RECALL_FLOOR);换 bge-m3 后更准
+- 无认证,owner 暂用 createdBy/anonymous,M5 接登录后换真实隔离
+
 ## [Unreleased] — M3 RAG 召回(进行中)
 
 ### Added

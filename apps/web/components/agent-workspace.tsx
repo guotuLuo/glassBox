@@ -13,6 +13,7 @@ import {
   FileText,
   History,
   Inbox,
+  Link2,
   ListTree,
   Loader2,
   type LucideIcon,
@@ -448,6 +449,15 @@ export function AgentWorkspace() {
                   <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <FileText className="size-3.5" />
                     引用级报告
+                    {active && (
+                      <Link
+                        href={`/report/${active.id}`}
+                        className="flex items-center gap-1 rounded border px-1.5 py-0.5 font-normal text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Link2 className="size-3" />
+                        分享页
+                      </Link>
+                    )}
                     <span className="ml-auto flex items-center gap-3 font-normal">
                       {(["green", "yellow", "red"] as const).map((r) => {
                         const n = report.verdicts.filter((v) => v.rating === r).length;

@@ -6,8 +6,9 @@ import {
   createSearchTool,
   type EmbeddingProvider,
   embeddingFromEnv,
+  MemoryStore,
   type ModelGateway,
-  runResearchAgent,
+  runDeepResearch,
   saveCheckpoint,
   sleep,
   ToolRegistry,
@@ -69,7 +70,33 @@ const researchHandler: AgentHandler = async ({ dbh, task, gateway }) => {
   const emit = async (eventType: string, message: string, payload?: unknown) => {
     await appendEvent(dbh.db, { taskId: task.id, eventType, message, payload });
   };
-  return runResearchAgent({ db: dbh.db, gateway, tools, emit }, task.id, question);
+
+  // owner 隔离:无认证时用 createdBy,回落到 anonymous(M5 接入登录后换真实用户)
+  const owner = task.createdBy ?? "anonymous";
+  const recallFloor = process.env.MEMORY_RECALL_FLOOR
+    ? Number(process.env.MEMORY_RECALL_FLOOR)
+    : undefined;
+  const memory = new MemoryStore(dbh.db, embedder, recallFloor ? { recallFloor } : {});
+  const recalled = await memory.recall(owner, question, 3);
+
+  const result = await runDeepResearch(
+    { db: dbh.db, gateway, tools, emit, recalledMemories: recalled.map((m) => m.content) },
+    task.id,
+    question,
+  );
+
+  // 把这次研究的高置信结论写入长期记忆(仅绿标论断,去重由 MemoryStore 兜底)
+  const greenClaims = result.synthesis.claims.filter(
+    (_, i) => result.verdicts.find((v) => v.claimIndex === i)?.rating === "green",
+  );
+  let written = 0;
+  for (const claim of greenClaims.slice(0, 3)) {
+    if (await memory.write(owner, "declarative", claim.text)) written++;
+  }
+  if (written > 0) {
+    await emit("memory.write", `沉淀 ${written} 条结论到长期记忆`, { written });
+  }
+  return result;
 };
 
 export class LeaseLostError extends Error {
