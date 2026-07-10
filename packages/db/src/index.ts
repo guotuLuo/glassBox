@@ -16,3 +16,6 @@ export type Db = DbHandle["db"];
 export type TaskRow = typeof schema.tasks.$inferSelect;
 export type NewTaskRow = typeof schema.tasks.$inferInsert;
 export type TaskEventRow = typeof schema.taskEvents.$inferSelect;
+export type TaskStepRow = typeof schema.taskSteps.$inferSelect;
+export type ModelCallRow = typeof schema.modelCalls.$inferSelect;
+export type ToolCallRow = typeof schema.toolCalls.$inferSelect;

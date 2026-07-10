@@ -35,9 +35,65 @@ export const KNOWN_TASK_EVENT_TYPES = [
   "task.requeued",
   "task.dead_lettered",
   "hello.step",
+  "agent.plan",
+  "agent.decide",
+  "agent.act",
+  "agent.observe",
+  "agent.synthesize",
+  "agent.verify",
+  "model.call",
+  "tool.call",
   "task.succeeded",
   "task.failed",
 ] as const;
+
+// ---------------- agent 循环契约(M2:planner 的结构化输出) ----------------
+
+/** 研究 agent 的输入 */
+export const researchInputSchema = z.object({
+  question: z.string().min(1).max(1000),
+});
+export type ResearchInput = z.infer<typeof researchInputSchema>;
+
+/** decide 步:planner 看观察结果后决定下一步动作 */
+export const agentDecisionSchema = z.object({
+  reasoning: z.string().max(2000),
+  action: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("use_tool"),
+      tool: z.string(),
+      input: z.record(z.string(), z.unknown()),
+    }),
+    z.object({ kind: z.literal("finish"), reason: z.string().max(500) }),
+  ]),
+});
+export type AgentDecision = z.infer<typeof agentDecisionSchema>;
+
+/** synthesize 步:综合出的带引用报告 */
+export const agentSynthesisSchema = z.object({
+  claims: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        citations: z.array(z.number().int().nonnegative()),
+      }),
+    )
+    .min(1),
+  summary: z.string().min(1),
+});
+export type AgentSynthesis = z.infer<typeof agentSynthesisSchema>;
+
+/** verify 步:另一个模型对每条论断的核实裁定(红/黄/绿) */
+export const claimVerdictSchema = z.object({
+  verdicts: z.array(
+    z.object({
+      claimIndex: z.number().int().nonnegative(),
+      rating: z.enum(["green", "yellow", "red"]),
+      rationale: z.string().max(1000),
+    }),
+  ),
+});
+export type ClaimVerdict = z.infer<typeof claimVerdictSchema>;
 
 /** 事件 DTO:SSE data 帧与回放接口的统一载荷 */
 export const taskEventDtoSchema = z.object({

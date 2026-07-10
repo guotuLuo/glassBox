@@ -2,6 +2,28 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号在 M1 公开上线后启用 SemVer。
 
+## [Unreleased] — M2 编排与工具(进行中)
+
+### Added
+
+- trace 三表(task_steps / model_calls / tool_calls,承 EMAgent 0001):每步、每次模型/工具调用可回放、可计费——玻璃盒本体(2026-07-10)
+- 模型网关自建:分层路由(cheap/strong/verify)、每供应商重试+熔断+failover、每次调用落 model_calls、每日预算硬顶;AI SDK 仅做 I/O(2026-07-10)
+- 结构化输出:提示词注入 JSON Schema + 防御性提取 + 一次修复重试,不依赖供应商 structured output(2026-07-10)
+- 工具注册表:Zod 入参契约 + 风险等级 + 统一执行入口;SSRF 防护(DNS 解析后拒私网/环回/云元数据地址)(2026-07-10)
+- 自适应研究 agent:plan→decide→act→observe→synthesize→verify,loop guard;句级引用绑定 + 独立型号红黄绿核实(2026-07-10)
+- ADR-003(模型网关 + 供应商现实:本地检验 + GPT 中转,chat 端点而非伪 responses)(2026-07-10)
+
+### 测试
+
+- 网关重试/熔断/failover/预算 + 防御性 JSON + 结构化修复重试(stub adapter,免费)、SSRF(含真实 DNS);core 全套 17 passing
+- 真 GPT 中转端到端冒烟通过:agent 7 步跑通、4 次模型调用记账、成本 ¥0.04
+
+### 诚实边界
+
+- 中转为逆向转售(无 SLA、过第三方):不放敏感内容、路线图不依赖、熔断敏感;其 /responses 是伪实现,用 chat 端点
+- web_search 为确定性内存语料桩(公司 unifiedsearch 不可用、博查 key 未配),M3 接真实检索
+- "验证器 ≠ 综合供应商"暂用不同型号近似,真跨供应商多样性待国产 key
+
 ## [Unreleased] — M1 耐久运行时(进行中)
 
 ### Added
