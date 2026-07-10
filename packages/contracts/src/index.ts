@@ -45,6 +45,7 @@ export const KNOWN_TASK_EVENT_TYPES = [
   "agent.verify",
   "memory.recall",
   "memory.write",
+  "web.fetch",
   "model.call",
   "tool.call",
   "task.succeeded",
