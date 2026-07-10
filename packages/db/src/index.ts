@@ -19,3 +19,6 @@ export type TaskEventRow = typeof schema.taskEvents.$inferSelect;
 export type TaskStepRow = typeof schema.taskSteps.$inferSelect;
 export type ModelCallRow = typeof schema.modelCalls.$inferSelect;
 export type ToolCallRow = typeof schema.toolCalls.$inferSelect;
+export type DocumentRow = typeof schema.documents.$inferSelect;
+export type DocumentChunkRow = typeof schema.documentChunks.$inferSelect;
+export type RagEvalRunRow = typeof schema.ragEvalRuns.$inferSelect;

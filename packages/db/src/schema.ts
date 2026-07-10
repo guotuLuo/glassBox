@@ -11,7 +11,11 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
+
+/** RAG 向量维度:对齐 SiliconFlow bge-m3(1024);本地嵌入桩也产 1024 维,切真模型免迁移 */
+export const EMBEDDING_DIM = 1024;
 
 /**
  * 字段设计移植自 EMAgent migrations 0001/0003/0004/0005(总纲 §6)。
@@ -128,6 +132,53 @@ export const toolCalls = pgTable(
   },
   (t) => [index("ix_tool_calls_task").on(t.taskId)],
 );
+
+// ---------------- RAG(M3):摄取 / 分块 / 混合检索 ----------------
+
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    source: text("source").notNull(),
+    ownerId: text("owner_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ix_documents_owner").on(t.ownerId)],
+);
+
+/**
+ * 分块表:content 是原文片段;bigramDoc 是 bigram 分词后的检索串(解决中文 FTS,总纲 §6);
+ * embedding 是向量。HNSW(向量)与 GIN(FTS 表达式索引)在迁移 SQL 里手工加(drizzle 不生成)。
+ */
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    bigramDoc: text("bigram_doc").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIM }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ix_chunks_document").on(t.documentId)],
+);
+
+/** RAG 评测基线:每次评测跑分入库,可追踪召回率曲线(总纲 M3 验收) */
+export const ragEvalRuns = pgTable("rag_eval_runs", {
+  id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+  label: text("label").notNull(),
+  retriever: text("retriever").notNull(),
+  hitRateAt3: doublePrecision("hit_rate_at_3").notNull(),
+  hitRateAt5: doublePrecision("hit_rate_at_5").notNull(),
+  mrr: doublePrecision("mrr").notNull(),
+  cases: integer("cases").notNull(),
+  detail: jsonb("detail"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const taskEvents = pgTable(
   "task_events",
