@@ -12,6 +12,8 @@ export * from "./rag/embed.js";
 export * from "./rag/ingest.js";
 export * from "./rag/retrieve.js";
 export * from "./rag/tokenize.js";
+export * from "./security/rate-limit.js";
+export * from "./security/sanitizer.js";
 export * from "./tools/fetch-page.js";
 export * from "./tools/rag-search.js";
 export * from "./tools/registry.js";

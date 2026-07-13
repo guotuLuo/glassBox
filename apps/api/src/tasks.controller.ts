@@ -24,12 +24,14 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { DB } from "./db.provider.js";
 import { toTaskDto, toTaskEventDto } from "./mappers.js";
 import { TaskEventsRelay } from "./task-events.relay.js";
+import { clientIp, ThrottleGuard } from "./throttle.guard.js";
 import { ZodValidationPipe } from "./zod.pipe.js";
 
 const HEARTBEAT_MS = 25_000;
@@ -44,12 +46,15 @@ export class TasksController {
   ) {}
 
   @Post()
+  @UseGuards(ThrottleGuard)
   async create(
     @Body(new ZodValidationPipe(createTaskRequestSchema)) body: CreateTaskRequest,
+    @Req() req: Request,
   ): Promise<CreateTaskResponse> {
     const { task, inserted } = await enqueueTask(this.dbh.db, {
       agentName: body.agentName,
       request: body.input,
+      createdBy: clientIp(req), // owner = IP(无认证);配额与长期记忆按此隔离
       ...(body.idempotencyKey ? { idempotencyKey: body.idempotencyKey } : {}),
     });
     return { task: toTaskDto(task), deduplicated: !inserted };
