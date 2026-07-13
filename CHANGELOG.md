@@ -2,6 +2,20 @@
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/);版本号在 M1 公开上线后启用 SemVer。
 
+## [Unreleased] — M5 评测与治理(进行中)
+
+### Added
+
+- 确定性 RAG 召回评测 CLI(eval:rag):摄取语料 → hit@3/@5 + MRR(三路检索)→ 入库 → hit@5 低于阈值退出码 1(2026-07-13)
+- CI 评测门禁:新增 eval-gate job(pg service 容器 + migrate + eval:rag),混合检索 hit@5 回归即卡合并(2026-07-13)
+- 公开 /evals 页:确定性召回门禁(分数 + 跨版本 sparkline 曲线)+ 研究忠实度(核实器红黄绿聚合 + 按研究任务分布),无需登录(2026-07-13)
+- API GET /api/evals:召回历史 + 忠实度聚合(2026-07-13)
+- ADR-007(评测门禁 + 公开 /evals)(2026-07-13)
+
+### 待办(M5 剩余)
+
+- LLM judge 夜跑(端到端质量打分)、多租户/配额/限流、提示注入防御(检索内容 untrusted 包装 + 启发式扫描)、负载测试
+
 ## [Unreleased] — M4 旗舰体验(进行中)
 
 ### Added

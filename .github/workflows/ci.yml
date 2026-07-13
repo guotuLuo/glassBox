@@ -1,4 +1,4 @@
-# M0 步骤 6 的 CI 半边:校验 + 构建。
+# M0 步骤 6 的 CI 半边:校验 + 构建 + 评测门禁。
 # 部署工作流(构建镜像推仓库 → SSH 拉起)等服务器 SSH 与镜像仓库选型确定后另起 deploy.yml。
 name: ci
 
@@ -28,3 +28,34 @@ jobs:
       - run: pnpm --filter @glassbox/web build
       # testcontainers 用例直接跑在 runner 自带的 Docker 上
       - run: pnpm test
+
+  # 评测门禁(总纲 §3.4):确定性 RAG 召回低于阈值即卡合并 —— "分数卡分"
+  eval-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: glassbox
+          POSTGRES_PASSWORD: change-me
+          POSTGRES_DB: glassbox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U glassbox -d glassbox"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://glassbox:change-me@localhost:5432/glassbox
+      EVAL_LABEL: ${{ github.sha }}
+      GATE_HIT5: "0.6"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @glassbox/db migrate
+      - run: pnpm --filter @glassbox/eval eval:rag

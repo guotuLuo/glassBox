@@ -8,11 +8,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:rag": "tsx src/run-rag-eval.ts"
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.0.4",
     "drizzle-orm": "^0.45.2",
+    "tsx": "^4.23.0",
     "typescript": "^5",
     "vitest": "^4.1.10"
   },

@@ -75,6 +75,45 @@ export async function ragStats(): Promise<{ documents: number; chunks: number }>
   return (await res.json()) as { documents: number; chunks: number };
 }
 
+// ---------------- 公开评测 ----------------
+
+export interface EvalsSummary {
+  recall: {
+    latest: { hitRateAt3: number; hitRateAt5: number; mrr: number; cases: number } | null;
+    history: Array<{
+      id: number;
+      label: string;
+      hitRateAt3: number;
+      hitRateAt5: number;
+      mrr: number;
+      cases: number;
+      createdAt: string;
+    }>;
+  };
+  faithfulness: {
+    totalClaims: number;
+    green: number;
+    yellow: number;
+    red: number;
+    greenRatio: number;
+    runs: Array<{
+      taskId: string;
+      question: string;
+      createdAt: string;
+      green: number;
+      yellow: number;
+      red: number;
+      greenRatio: number;
+    }>;
+  };
+}
+
+export async function getEvals(): Promise<EvalsSummary> {
+  const res = await fetch(`${API_BASE}/api/evals`);
+  if (!res.ok) throw new Error(`评测加载失败:HTTP ${res.status}`);
+  return (await res.json()) as EvalsSummary;
+}
+
 // ---------------- 研究报告(分享页) ----------------
 
 export interface ResearchReportData {

@@ -24,6 +24,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   Sparkles,
+  Target,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -336,6 +337,13 @@ export function AgentWorkspace() {
         >
           <Search className="size-3.5" />
           召回 Playground
+        </Link>
+        <Link
+          href="/evals"
+          className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+        >
+          <Target className="size-3.5" />
+          评测 /evals
         </Link>
         <div className="flex items-center gap-1.5 border-t border-border/60 px-4 py-2.5 text-[10px] text-muted-foreground/70">
           <span className="size-1.5 rounded-full bg-emerald-400/80" />
