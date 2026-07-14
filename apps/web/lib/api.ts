@@ -9,13 +9,13 @@ import {
 /** M0 直连 api(CORS 放行);上线后由 Caddy 统一域名路由 */
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3001";
 
-export type AgentKind = "hello" | "research";
+export type AgentKind = "hello" | "research" | "approval";
 
 export async function createTask(text: string, agent: AgentKind): Promise<CreateTaskResponse> {
   const body =
     agent === "research"
       ? { agentName: "research", input: { question: text } }
-      : { agentName: "hello", input: { message: text } };
+      : { agentName: agent, input: { message: text } };
   const res = await fetch(`${API_BASE}/api/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,6 +40,19 @@ export async function getTask(taskId: string): Promise<TaskDto> {
 
 export function taskEventsUrl(taskId: string): string {
   return `${API_BASE}/api/tasks/${taskId}/events`;
+}
+
+export async function resolveApproval(
+  taskId: string,
+  decision: "approve" | "reject",
+  note?: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/approvals/${taskId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, ...(note ? { note } : {}) }),
+  });
+  if (!res.ok) throw new Error(`审批失败:HTTP ${res.status}`);
 }
 
 // ---------------- RAG 召回 playground ----------------

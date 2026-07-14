@@ -17,7 +17,13 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from "@nestjs/common";
-import { type AgentContext, buildGateway, LeaseLostError, resolveAgent } from "./agents.js";
+import {
+  type AgentContext,
+  buildGateway,
+  LeaseLostError,
+  ParkedError,
+  resolveAgent,
+} from "./agents.js";
 import { DB } from "./db.provider.js";
 import { intEnv } from "./env.js";
 
@@ -133,6 +139,10 @@ export class WorkerService implements OnApplicationBootstrap, OnApplicationShutd
       );
     } catch (err) {
       if (err instanceof LeaseLostError) return;
+      if (err instanceof ParkedError) {
+        this.logger.log(`task ${task.id} parked for approval`);
+        return; // park 已把任务转 waiting_approval,不写终态
+      }
       await this.finishFail(task.id, errorMessage(err));
     } finally {
       clearInterval(heartbeat);

@@ -16,9 +16,11 @@
 - 限流 + 配额:提交任务守卫,每 IP 每分钟滑动窗口限流(超限 429)+ 每 owner 每日配额(按 tasks 表统计);实测 5×201→429、不同 IP 独立(2026-07-13)
 - 安全测试:sanitizer(脱敏/中英注入/组合)+ 滑动窗口限流,8 纯逻辑用例;ADR-008(2026-07-13)
 
+- 审批门 + park/resume(人在环路):parkForApproval(running→waiting_approval,存检查点、释放租约,扛重启)/ resolveApproval(approve 回 queued 从检查点恢复、reject 终态);ParkedError 让位;approval 演示 agent(草拟→park→精确恢复,草拟不重做);审批台 API(GET/POST /api/approvals)+ 工作台审批面板;实测 park→批准→精确恢复(草拟恰好一次)、reject→failed、park 扛重启,3 集成用例;闭合 ADR-008「最后一米」;ADR-009(2026-07-14)
+
 ### 待办(M5 剩余)
 
-- LLM judge 夜跑(端到端质量打分)、登录接入(owner 从 IP 换真实用户)、审批门接线(高风险工具人在环路)、负载测试
+- LLM judge 夜跑(端到端质量打分)、登录接入(better-auth,owner 从 IP 换真实用户 + 审批人 RBAC)、风险工具自动接审批门、负载测试
 
 ## [Unreleased] — M4 旗舰体验(进行中)
 

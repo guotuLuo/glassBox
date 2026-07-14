@@ -47,11 +47,32 @@ export const KNOWN_TASK_EVENT_TYPES = [
   "memory.write",
   "web.fetch",
   "security.flag",
+  "approval.requested",
+  "approval.approved",
+  "approval.rejected",
+  "approval.resumed",
   "model.call",
   "tool.call",
   "task.succeeded",
   "task.failed",
 ] as const;
+
+/** 审批决议请求(人在环路) */
+export const approvalDecisionSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  note: z.string().max(500).optional(),
+});
+export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
+
+/** 待审批任务 DTO */
+export const pendingApprovalSchema = z.object({
+  taskId: z.uuid(),
+  agentName: z.string(),
+  reason: z.string(),
+  summary: z.string().nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+export type PendingApproval = z.infer<typeof pendingApprovalSchema>;
 
 /** plan 步:把课题拆成 2–4 个子问题(fan-out) */
 export const subQuestionPlanSchema = z.object({
@@ -138,6 +159,11 @@ export const createTaskRequestSchema = z.discriminatedUnion("agentName", [
   z.object({
     agentName: z.literal("research"),
     input: researchInputSchema,
+    idempotencyKey: z.string().min(8).max(128).optional(),
+  }),
+  z.object({
+    agentName: z.literal("approval"),
+    input: helloInputSchema,
     idempotencyKey: z.string().min(8).max(128).optional(),
   }),
 ]);

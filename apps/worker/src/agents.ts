@@ -9,6 +9,7 @@ import {
   embeddingFromEnv,
   MemoryStore,
   type ModelGateway,
+  parkForApproval,
   runDeepResearch,
   type SearchHit,
   saveCheckpoint,
@@ -100,6 +101,57 @@ function mergedSearchTool(web: SearchTool, kb: SearchTool, emit: EmitFn): Search
   };
 }
 
+/** worker 让位信号:任务已 park 为待审批,execute() 不得写终态 */
+export class ParkedError extends Error {
+  constructor() {
+    super("task parked for approval");
+    this.name = "ParkedError";
+  }
+}
+
+/**
+ * 审批演示 agent:草拟 → 需人工审批的"写动作" → 审批通过后精确恢复并执行。
+ * 映射总纲 §8「基于内容触发的写动作必须过审批门」;演示 park 后精确恢复(差异化 #2)。
+ */
+const approvalHandler: AgentHandler = async ({ dbh, task }) => {
+  const input = helloInputSchema.parse(task.request);
+  const cp = task.checkpoint as {
+    drafted?: boolean;
+    decision?: string;
+    approvalNote?: string;
+  } | null;
+
+  // 已审批 → 精确恢复,直接执行写动作(不重做草拟)
+  if (cp?.decision === "approved") {
+    await appendEvent(dbh.db, {
+      taskId: task.id,
+      eventType: "approval.resumed",
+      message: "审批通过,执行写动作",
+      payload: { note: cp.approvalNote ?? null },
+    });
+    return {
+      published: input.message,
+      resumedFromApproval: true,
+      approvalNote: cp.approvalNote ?? null,
+    };
+  }
+
+  // 首次:草拟(写检查点),然后 park 等审批
+  await appendEvent(dbh.db, {
+    taskId: task.id,
+    eventType: "hello.step",
+    message: `草拟内容:"${input.message}"`,
+    payload: { drafted: true },
+  });
+  await saveCheckpoint(dbh.db, task.id, task.leaseOwner ?? "", { drafted: true });
+  const parked = await parkForApproval(dbh.db, task.id, task.leaseOwner ?? "", {
+    reason: `发布"${input.message}"是写动作,需人工审批`,
+    checkpoint: { drafted: true, pendingApproval: true },
+  });
+  if (parked) throw new ParkedError();
+  return { published: input.message, resumedFromApproval: false }; // park 失败(极少),兜底直接完成
+};
+
 const helloHandler: AgentHandler = async ({ dbh, task, isLeaseLost }) => {
   const input = helloInputSchema.parse(task.request);
   const cp = task.checkpoint as { step?: number } | null;
@@ -163,6 +215,7 @@ export class LeaseLostError extends Error {
 const HANDLERS: Record<string, AgentHandler> = {
   hello: helloHandler,
   research: researchHandler,
+  approval: approvalHandler,
 };
 
 export function resolveAgent(name: string): AgentHandler | undefined {

@@ -11,6 +11,7 @@ import {
   Check,
   Cpu,
   FileText,
+  Gavel,
   Globe,
   History,
   Inbox,
@@ -22,6 +23,7 @@ import {
   RotateCcw,
   Search,
   SendHorizontal,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Target,
@@ -32,7 +34,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { type AgentKind, createTask, listTasks, taskEventsUrl } from "@/lib/api";
+import { type AgentKind, createTask, listTasks, resolveApproval, taskEventsUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const TERMINAL_STATUSES = new Set<TaskStatus>(["succeeded", "failed", "cancelled"]);
@@ -73,6 +75,11 @@ const EVENT_META: Record<string, { icon: LucideIcon; cls: string }> = {
   "agent.synthesize": { icon: FileText, cls: "border-emerald-500/40 text-emerald-400" },
   "agent.verify": { icon: ShieldCheck, cls: "border-emerald-500/40 text-emerald-400" },
   "web.fetch": { icon: Globe, cls: "border-cyan-500/40 text-cyan-400" },
+  "security.flag": { icon: ShieldAlert, cls: "border-amber-500/40 text-amber-400" },
+  "approval.requested": { icon: Gavel, cls: "border-amber-500/40 text-amber-400" },
+  "approval.approved": { icon: Check, cls: "border-emerald-500/40 text-emerald-400" },
+  "approval.rejected": { icon: X, cls: "border-red-500/40 text-red-400" },
+  "approval.resumed": { icon: RotateCcw, cls: "border-blue-500/40 text-blue-400" },
   "model.call": { icon: Cpu, cls: "border-violet-500/40 text-violet-400" },
   "tool.call": { icon: Search, cls: "border-cyan-500/40 text-cyan-400" },
   "task.succeeded": { icon: Check, cls: "border-emerald-500/40 text-emerald-400" },
@@ -115,6 +122,10 @@ function statusFromEvents(events: TaskEventDto[], fallback: TaskStatus): TaskSta
         return "succeeded";
       case "task.failed":
         return "failed";
+      case "approval.requested":
+        return "waiting_approval";
+      case "approval.approved":
+      case "approval.resumed":
       case "task.claimed":
       case "hello.step":
         return "running";
@@ -174,11 +185,16 @@ export function AgentWorkspace() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
+  const [deciding, setDeciding] = useState(false);
   const active = tasks.find((t) => t.id === activeId) ?? null;
   const status: TaskStatus = active ? statusFromEvents(events, active.status) : "queued";
   const greeting = greetingOf(events);
   const failedEvent = events.find((e) => e.eventType === "task.failed");
   const report = reportFromEvents(events);
+  const approvalReason =
+    status === "waiting_approval"
+      ? (events.filter((e) => e.eventType === "approval.requested").at(-1)?.message ?? "需要审批")
+      : null;
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -188,6 +204,24 @@ export function AgentWorkspace() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
+
+  const decide = useCallback(
+    async (decision: "approve" | "reject") => {
+      if (!activeId || deciding) return;
+      setDeciding(true);
+      setError(null);
+      try {
+        await resolveApproval(activeId, decision);
+        await refreshTasks();
+        // 批准后任务恢复,新事件经既有 SSE 流入;拒绝则终态
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setDeciding(false);
+      }
+    },
+    [activeId, deciding, refreshTasks],
+  );
 
   useEffect(() => {
     void refreshTasks();
@@ -472,6 +506,44 @@ export function AgentWorkspace() {
                 );
               })}
 
+              {approvalReason && (
+                <li className="mt-5 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-4">
+                  <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-amber-300">
+                    <Gavel className="size-4" />
+                    需要人工审批
+                  </div>
+                  <p className="mb-3 text-sm text-foreground/90">{approvalReason}</p>
+                  <p className="mb-3 text-[11.5px] leading-5 text-muted-foreground">
+                    任务已 park 为 <span className="font-mono">waiting_approval</span>
+                    (纯数据库态,无租约、不占 worker、可扛重启)。批准后从检查点精确恢复,草拟不重做。
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => decide("approve")}
+                      disabled={deciding}
+                      className="bg-emerald-600 text-white hover:bg-emerald-500"
+                    >
+                      {deciding ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Check className="size-3.5" />
+                      )}
+                      批准
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => decide("reject")}
+                      disabled={deciding}
+                      className="border-red-500/40 text-red-400 hover:bg-red-500/10"
+                    >
+                      <X className="size-3.5" />
+                      拒绝
+                    </Button>
+                  </div>
+                </li>
+              )}
               {greeting && (
                 <li className="mt-4 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] px-4 py-3 text-sm font-medium text-emerald-300">
                   {greeting}
@@ -567,6 +639,7 @@ export function AgentWorkspace() {
                   {(
                     [
                       { k: "research", label: "深度研究" },
+                      { k: "approval", label: "审批演示" },
                       { k: "hello", label: "hello" },
                     ] as const
                   ).map((opt) => (
@@ -586,7 +659,11 @@ export function AgentWorkspace() {
                   ))}
                 </div>
                 <span className="ml-1 text-[10.5px] text-muted-foreground/70">
-                  {agent === "research" ? "拆解 → 检索 → 综合 → 核实" : "链路自检 · 不调模型"}
+                  {agent === "research"
+                    ? "拆解 → 检索 → 综合 → 核实"
+                    : agent === "approval"
+                      ? "草拟 → park 审批 → 精确恢复"
+                      : "链路自检 · 不调模型"}
                 </span>
               </div>
               <div className="flex items-end gap-2">
@@ -604,7 +681,9 @@ export function AgentWorkspace() {
                   placeholder={
                     agent === "research"
                       ? "提一个研究问题,例如「为什么用 SKIP LOCKED 做队列」"
-                      : '把一句话交给 hello agent,例如"你是谁"'
+                      : agent === "approval"
+                        ? "输入要发布的内容,会 park 等你审批"
+                        : '把一句话交给 hello agent,例如"你是谁"'
                   }
                   maxLength={agent === "research" ? 1000 : 500}
                   disabled={submitting}

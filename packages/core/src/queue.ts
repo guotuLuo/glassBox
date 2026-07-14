@@ -189,6 +189,98 @@ export async function saveCheckpoint(
   return rows.length > 0;
 }
 
+export interface ParkForApprovalInput {
+  reason: string;
+  /** 恢复所需检查点(含 pendingApproval 标记);审批通过后随任务回到新 worker */
+  checkpoint: unknown;
+}
+
+/**
+ * park 为待审批:running(本 worker 持有)→ waiting_approval,存检查点、释放租约。
+ * park 后任务不在队列、无租约、非终态 —— 纯数据库态,能扛 worker 重启(总纲 §6 park 语义)。
+ * reaper 只碰 running,不会回收 waiting_approval。守卫:仅当前持有者可 park。
+ */
+export async function parkForApproval(
+  db: Db,
+  taskId: string,
+  workerId: string,
+  input: ParkForApprovalInput,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(tasks)
+      .set({
+        status: "waiting_approval",
+        checkpoint: input.checkpoint,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(tasks.id, taskId), eq(tasks.leaseOwner, workerId), eq(tasks.status, "running")))
+      .returning({ id: tasks.id });
+    if (rows.length === 0) return false;
+    await appendEvent(tx, { taskId, eventType: "approval.requested", message: input.reason });
+    return true;
+  });
+}
+
+/** 待审批任务列表(审批台) */
+export async function listPendingApprovals(db: Db): Promise<TaskRow[]> {
+  return db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.status, "waiting_approval"))
+    .orderBy(tasks.createdAt);
+}
+
+/**
+ * 审批决议:approve → 回 queued(availableAt=now)让 worker 重新认领并从检查点续跑;
+ * reject → 终态 failed。守卫:仅 waiting_approval 可决议(防重复/竞态)。
+ * approve 时把 decision 写进检查点,恢复的 worker 据此跨过审批点。
+ */
+export async function resolveApproval(
+  db: Db,
+  taskId: string,
+  decision: "approve" | "reject",
+  note?: string,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const current = await tx
+      .select({ checkpoint: tasks.checkpoint })
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), eq(tasks.status, "waiting_approval")))
+      .limit(1);
+    if (current.length === 0) return false;
+
+    if (decision === "reject") {
+      await tx
+        .update(tasks)
+        .set({
+          status: "failed",
+          error: `approval rejected${note ? `: ${note}` : ""}`,
+          finishedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, "waiting_approval")));
+      await appendEvent(tx, { taskId, eventType: "approval.rejected", message: note });
+      return true;
+    }
+
+    const cp = (current[0]?.checkpoint ?? {}) as Record<string, unknown>;
+    await tx
+      .update(tasks)
+      .set({
+        status: "queued",
+        availableAt: sql`now()`,
+        checkpoint: { ...cp, decision: "approved", approvalNote: note ?? null },
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(tasks.id, taskId), eq(tasks.status, "waiting_approval")));
+    await appendEvent(tx, { taskId, eventType: "approval.approved", message: note });
+    return true;
+  });
+}
+
 export interface ReapResult {
   requeued: number;
   deadLettered: number;
